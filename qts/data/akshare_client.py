@@ -139,7 +139,10 @@ class AKShareClient(MarketDataProvider):
         # ST flag: crude detection by 5% limit
         raw["is_st"] = False
 
-        # Adj factor: with qfq adjust, close is already adjusted
+        # adj_factor: with qfq (前复权), AKShare returns already-adjusted OHLC.
+        # adj_factor=1.0 means "no further adjustment needed" for qfq data.
+        # For real trading, you need unadjusted prices to compute limit_up/down correctly.
+        # Here we store 1.0 and note: limit_up/down are approximate on qfq data.
         raw["adj_factor"] = 1.0
 
         cols = [

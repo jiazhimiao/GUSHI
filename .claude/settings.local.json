@@ -22,7 +22,12 @@
       "Bash(python -c*)",
       "Bash(python -m pytest tests/ -v --tb=line)",
       "Bash(git init *)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(git commit -m ' *)",
+      "Bash(python scripts/check_future_leak.py)",
+      "Bash(python scripts/build_historical_universe.py)",
+      "Bash(python scripts/param_robustness.py --mode sensitivity --start 2024-01-01 --end 2025-06-30)",
+      "Bash(git add *)"
     ]
   }
 }

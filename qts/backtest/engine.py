@@ -92,6 +92,13 @@ class BacktestEngine:
         """
         logger.info(f"Running backtest [{strategy.name}]: {self.start_date} to {self.end_date}")
         logger.info(f"Initial cash: {self.initial_cash:,.0f}, execution: {self.execution_price}")
+
+        # Survivorship bias warning
+        import json
+        const_path = Path(self.bar_path).parent.parent / "historical_constituents.json"
+        if not const_path.exists():
+            logger.warning("未找到历史成分股数据。当前回测使用最新成分股列表，存在幸存者偏差。")
+            logger.warning("建议运行: python scripts/build_historical_universe.py")
         self._strategy_ref = strategy  # for _update_entry_peaks
         strategy_peak = self.initial_cash  # track strategy-level peak for circuit breaker
 
