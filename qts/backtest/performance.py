@@ -68,15 +68,46 @@ def compute_metrics(nav_df: pd.DataFrame, trades_df: pd.DataFrame, initial_cash:
     else:
         metrics["calmar_ratio"] = 0.0
 
-    # Win rate
+    # Win rate and profit/loss ratio
     if len(returns) > 0:
         metrics["win_rate_pct"] = round((returns > 0).mean() * 100, 2)
-        metrics["avg_win_pct"] = round(returns[returns > 0].mean() * 100, 4) if (returns > 0).any() else 0
-        metrics["avg_loss_pct"] = round(returns[returns < 0].mean() * 100, 4) if (returns < 0).any() else 0
+        avg_win = returns[returns > 0].mean() if (returns > 0).any() else 0
+        avg_loss = abs(returns[returns < 0].mean()) if (returns < 0).any() else 1e-10
+        metrics["avg_win_pct"] = round(avg_win * 100, 4)
+        metrics["avg_loss_pct"] = round(-returns[returns < 0].mean() * 100, 4) if (returns < 0).any() else 0
+        metrics["profit_loss_ratio"] = round(avg_win / avg_loss, 2) if avg_loss > 0 else 0
     else:
         metrics["win_rate_pct"] = 0
         metrics["avg_win_pct"] = 0
         metrics["avg_loss_pct"] = 0
+        metrics["profit_loss_ratio"] = 0
+
+    # Average holding days (from trades)
+    if not trades_df.empty and "date" in trades_df.columns and "symbol" in trades_df.columns:
+        t = trades_df.copy()
+        t["date_dt"] = pd.to_datetime(t["date"])
+        # Estimate: group by symbol and (buy-sell pair), compute days between
+        buy_dates = t[t["side"] == "BUY"].groupby("symbol")["date_dt"].apply(list)
+        sell_dates = t[t["side"] == "SELL"].groupby("symbol")["date_dt"].apply(list)
+        holding_days_list = []
+        for sym in set(buy_dates.index) & set(sell_dates.index):
+            buys = sorted(buy_dates[sym])
+            sells = sorted(sell_dates[sym])
+            for b, s in zip(buys, sells[:len(buys)]):
+                if s > b:
+                    holding_days_list.append((s - b).days)
+        metrics["avg_holding_days"] = round(sum(holding_days_list) / len(holding_days_list), 1) if holding_days_list else 0
+    else:
+        metrics["avg_holding_days"] = 0
+
+    # Yearly returns
+    nav["year"] = pd.to_datetime(nav["date"]).dt.year
+    yearly = nav.groupby("year").agg(
+        start=("total_value", "first"),
+        end=("total_value", "last"),
+    )
+    yearly["yearly_return_pct"] = (yearly["end"] / yearly["start"] - 1) * 100
+    metrics["yearly_returns"] = yearly  # for display
 
     # Max consecutive losses
     if len(returns) > 0:

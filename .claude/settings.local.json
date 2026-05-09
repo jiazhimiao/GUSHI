@@ -27,7 +27,9 @@
       "Bash(python scripts/check_future_leak.py)",
       "Bash(python scripts/build_historical_universe.py)",
       "Bash(python scripts/param_robustness.py --mode sensitivity --start 2024-01-01 --end 2025-06-30)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(python -m compileall scripts/ga_optimizer.py)",
+      "Bash(python scripts/fetch_extended_universe.py)"
     ]
   }
 }

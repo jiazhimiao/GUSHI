@@ -427,11 +427,38 @@ if "results" in st.session_state:
             col8.metric("换手率", f"{metrics.get('turnover_ratio', 0):.4f}",
                          help="买卖总金额÷初始资金。\n比如换手率50x=买卖了50倍本金的量。\n换手率太高说明交易过于频繁，手续费吃利润")
         with col9:
-            col9.metric("最终净值", f"{metrics.get('final_value', 0):,.0f}",
-                         help=f"初始资金{metrics.get('initial_cash', 0):,.0f}最终变成多少")
+            col9.metric("盈亏比", f"{metrics.get('profit_loss_ratio', 0):.2f}",
+                         help="平均盈利 ÷ 平均亏损。\n比如1.5=每次盈利是每次亏损的1.5倍。\n>1.5算不错，>2.0优秀。\n趋势策略胜率低但盈亏比高")
         with col10:
-            col10.metric("连续亏损天数", metrics.get("max_consecutive_losses", 0),
-                         help="最长的连续亏损天数。\n太长说明策略在特定行情下会持续亏，需要改进")
+            col10.metric("平均持仓(天)", metrics.get("avg_holding_days", 0),
+                         help="买入到卖出的平均天数。\n太短=频繁交易，太长=资金效率低。\n趋势策略一般5-20天")
+
+        col11, col12, col13, col14, col15 = st.columns(5)
+        with col11:
+            col11.metric("最终净值", f"{metrics.get('final_value', 0):,.0f}",
+                         help=f"初始资金{metrics.get('initial_cash', 0):,.0f}最终变成多少")
+        with col12:
+            col12.metric("连续亏损天数", metrics.get("max_consecutive_losses", 0),
+                         help="最长的连续亏损天数")
+        with col13:
+            col13.metric("最佳月份(%)", f"{metrics.get('best_month_pct', 0):.1f}",
+                         help="收益最高的单月")
+        with col14:
+            col14.metric("最差月份(%)", f"{metrics.get('worst_month_pct', 0):.1f}",
+                         help="亏损最多的单月")
+        with col15:
+            col15.metric("正收益月份", f"{metrics.get('positive_months_pct', 0):.1f}%",
+                         help="盈利月份占比")
+
+        # Yearly returns table
+        yearly = metrics.get("yearly_returns")
+        if yearly is not None and not yearly.empty:
+            st.subheader("年度收益")
+            yr = yearly.copy()
+            yr["yearly_return_pct"] = yr["yearly_return_pct"].round(2)
+            yr = yr.reset_index()
+            yr.columns = ["年份", "年初净值", "年末净值", "年度收益(%)"]
+            st.dataframe(yr, use_container_width=True, hide_index=True)
 
         # Equity curve
         st.subheader("净值曲线与回撤")

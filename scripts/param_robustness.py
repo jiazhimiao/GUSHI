@@ -37,6 +37,8 @@ BASE_PARAMS = {
     "atr_multiple": 2.0,
     "atr_period": 14,
     "profit_lock_pct": 0.15,
+    "breadth_ma_days": 30,
+    "strategy_max_dd": 0.15,
     "top_n": 5,
     "max_weight_per_stock": 0.15,
 }
@@ -51,13 +53,16 @@ SENSITIVITY_GRID = {
     "min_breadth": [0.40, 0.50, 0.60],
     "breadth_half": [0.20, 0.30, 0.40],
     "atr_multiple": [1.5, 2.0, 3.0],
+    "profit_lock_pct": [0.0, 0.10, 0.15, 0.25],
+    "breadth_ma_days": [10, 20, 30, 60],
+    "strategy_max_dd": [0.10, 0.15, 0.25, 0.99],
     "top_n": [3, 5, 10, 15],
     "max_weight_per_stock": [0.10, 0.15, 0.20],
 }
 
 
 def _make_strategy(params):
-    return TrendBreakoutStrategy(
+    s = TrendBreakoutStrategy(
         breakout_days=params["breakout_days"],
         support_days=params["support_days"],
         ma_days=params["ma_days"],
@@ -71,6 +76,10 @@ def _make_strategy(params):
         top_n=params["top_n"],
         max_weight_per_stock=params["max_weight_per_stock"],
     )
+    s.breadth_ma_days = params["breadth_ma_days"]
+    s.strategy_max_dd = params["strategy_max_dd"]
+    s.use_dow_filter = False
+    return s
 
 
 def _run_single(params, start, end):

@@ -109,7 +109,37 @@ class TestAccountValue:
         fill = broker.place_buy_order("000001", 10000, 10.0, 11.0, "2024-01-01")
         assert fill is not None
         tv = broker.get_total_value({"000001": 10.0})
-        # Total value = cash + position market value
         positions = broker.get_all_positions()
         pos_val = positions.iloc[0]["quantity"] * 10.0
         assert abs(tv - broker.cash - pos_val) < 0.01
+
+
+class TestSuspension:
+    def test_suspended_stock_cannot_trade(self, broker):
+        import pandas as pd
+        market_data = pd.DataFrame([{
+            "symbol": "000001", "trade_date": "2024-01-01",
+            "close": 10.0, "is_suspended": True, "is_st": False,
+        }])
+        ok, reason = broker.can_trade("000001", market_data, "2024-01-01")
+        assert not ok
+        assert "suspended" in reason
+
+    def test_non_suspended_stock_can_trade(self, broker):
+        import pandas as pd
+        market_data = pd.DataFrame([{
+            "symbol": "000001", "trade_date": "2024-01-01",
+            "close": 10.0, "is_suspended": False, "is_st": False,
+        }])
+        ok, _ = broker.can_trade("000001", market_data, "2024-01-01")
+        assert ok
+
+    def test_st_stock_cannot_trade(self, broker):
+        import pandas as pd
+        market_data = pd.DataFrame([{
+            "symbol": "000001", "trade_date": "2024-01-01",
+            "close": 10.0, "is_suspended": False, "is_st": True,
+        }])
+        ok, reason = broker.can_trade("000001", market_data, "2024-01-01")
+        assert not ok
+        assert "st" in reason
