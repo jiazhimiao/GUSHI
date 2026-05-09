@@ -1,0 +1,19 @@
+# Risk management configuration
+
+# Pre-trade risk checks
+max_position_weight: 0.08     # single stock max 8%
+max_drawdown_cut: 0.10        # cut position if drawdown exceeds 10%
+max_industry_weight: 0.30     # single industry max 30%
+max_daily_turnover: 0.50      # max daily turnover ratio
+max_order_value: 500000       # max single order value
+max_positions: 30             # max number of positions
+
+# Kill switch
+blacklist: []                 # stocks never to trade
+ban_st: true                  # never trade ST stocks
+ban_suspended: true           # never trade suspended stocks
+ban_limit_up: true            # don't chase limit up
+ban_limit_down: true          # don't sell into limit down
+
+# Alerts
+max_consecutive_failures: 3   # kill if N consecutive order failures

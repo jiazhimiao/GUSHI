@@ -1,0 +1,44 @@
+# HS300 Momentum + Volatility Strategy
+strategy_name: hs300_momentum
+
+# Universe
+universe: HS300
+
+# Rebalance frequency: daily, weekly, monthly
+rebalance: daily
+
+# Minimum turnover threshold to trigger rebalance (0.0 = always, 0.20 = only if >=20% portfolio changes)
+min_turnover: 0.20
+
+# Stock filtering rules
+filters:
+  exclude_st: true
+  exclude_suspended: true
+  min_list_days: 120
+  min_turnover_amount: 50000000  # 5000万成交额
+
+# Factor weights for composite score
+factors:
+  momentum_20d:
+    weight: 0.4
+  volatility_60d:
+    weight: -0.3      # negative: prefer lower volatility
+  turnover_ratio:
+    weight: 0.3       # positive: prefer higher relative turnover
+
+# Portfolio construction
+portfolio:
+  top_n: 20
+  max_weight_per_stock: 0.08
+  cash_buffer: 0.02
+  weighting: equal     # equal or score
+
+# Risk constraints
+risk:
+  max_drawdown_cut: 0.10
+  max_industry_weight: 0.30
+
+# Execution
+execution:
+  price_type: close       # close, vwap, next_open
+  slippage_bps: 10        # 10 bps

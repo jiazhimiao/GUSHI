@@ -1,0 +1,40 @@
+# Data files (large, frequently updated)
+data/raw/
+data/clean/
+data/factors/
+data/backtest/
+
+# Environment and secrets
+.env
+.env.local
+*.token
+*_secret.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Test cache
+.pytest_cache/
+.mypy_cache/
+
+# Logs
+*.log

@@ -1,0 +1,15 @@
+# Broker / execution gateway config
+gateway: mock
+account_id: ""
+host: ""
+port: 0
+
+# Default cash for backtest
+initial_cash: 1000000
+
+# A-share trading rules
+commission_rate: 0.00025    # 万2.5
+stamp_tax_rate: 0.0005      # 万5, sell only (2024 rule)
+min_commission: 5.0          # 最低5元
+slippage_bps: 10.0          # 10 bps slippage
+lot_size: 100               # 100 shares per lot

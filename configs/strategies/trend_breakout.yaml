@@ -1,0 +1,40 @@
+# 趋势突破策略配置
+# 右侧交易：突破买入 + 支撑止损 + 主线跟随 + 混沌空仓
+strategy_name: trend_breakout
+strategy_class: TrendBreakoutStrategy
+
+# Universe
+universe: HS300
+
+# Rebalance frequency
+rebalance: daily
+
+# Minimum turnover threshold (0=always execute when signals change)
+min_turnover: 0.0
+
+# ── Entry Conditions ──
+entry:
+  breakout_days: 20        # 突破N日高点
+  volume_ratio: 1.5         # 成交量 >= N日均量的倍数
+  ma_days: 60               # 收盘价必须站上N日均线
+
+# ── Exit Conditions ──
+exit:
+  support_days: 10          # 跌破N日最低价 → 止损
+  ma_days: 60               # 跌破N日均线 → 止损
+  max_loss_pct: 0.08        # 从持仓最高点回撤8% → 止损
+
+# ── Market Regime ──
+regime:
+  min_breadth: 0.40         # 市场广度（站上60日均线占比）>= 40% 才交易
+
+# ── Portfolio ──
+portfolio:
+  top_n: 15                 # 最多持有15只
+  max_weight_per_stock: 0.10  # 单票最大10%
+  cash_buffer: 0.02         # 保留2%现金
+
+# Stock filtering rules
+filters:
+  exclude_st: true
+  exclude_suspended: true

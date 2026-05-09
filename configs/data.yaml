@@ -1,0 +1,15 @@
+# Data source configuration
+provider: akshare
+
+# Local storage paths (relative to project root)
+cache_dir: data/raw
+clean_dir: data/clean
+factors_dir: data/factors
+backtest_dir: data/backtest
+
+# Default date range for data fetching
+default_start: "2020-01-01"
+
+# Universe of stocks to fetch
+# Options: HS300, CSI500, CSI1000, ALL
+default_universe: HS300
