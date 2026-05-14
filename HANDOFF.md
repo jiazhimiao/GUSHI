@@ -84,9 +84,11 @@ MVP 1：本地回测系统
 
 ```
 historical_constituents.json:  MD5 c79f9f1649895c897af28961e5d3c1fb
-HS300_daily.parquet:          MD5 69a78859fcd6d7599aad6dbccf8da535
+HS300_daily.parquet:          MD5 24a4f235925fa4de5edc9ed8fba6777f (last: 2026-05-14, 5,299,377 rows)
 calendar.parquet:             MD5 e37638f5f3ac61a29603c051ceec013b
 ```
+
+旧 HS300 parquet hash: `69a78859fcd6d7599aad6dbccf8da535` (last: 2026-05-08)。2026-05-14 增量更新 +1211 行，旧数据 0 变化。
 
 ---
 
