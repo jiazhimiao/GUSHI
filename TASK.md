@@ -1,36 +1,32 @@
 # TASK.md — 下一会话任务
 
-## 标题: 代码提交前审查
+## 标题: 推进至 paper trading 连续模拟
 
 ### 背景
 
-- Candidate B 升级为 new_candidate_baseline (score_high=0.80, atr_bear=0.89)
-- 3 次跨进程可复现性验证通过（全部指标一致）
-- Phase 1a/1b/1c + Phase 2-mini 全部完成
-- 正式大 GA 暂缓
+- Candidate B 为当前 new_candidate_baseline (fitness=2.304)
+- 单日 daily signal 已实现 (`scripts/generate_daily_signal.py`)
+- 10 日 dry-run 通过，信号行为合理
+- 数据已更新至 2026-05-14
 
 ### 任务
 
-1. 分类未提交文件：确认哪些进入 git、哪些进入 .gitignore
-2. 清理不需要的临时文件
-3. 准备 git commit 的文件清单
-4. 可选：更新 .gitignore
+1. 实现 `--replay-last-n` 的连续持仓传递模式
+2. 添加 `positions.json` 自动更新（每日信号生成后更新持仓）
+3. 接入更新数据 → 生成信号 → 更新持仓的日常流程
+4. 验证连续模拟 30 天以上的持仓/信号一致性
 
-### 禁止事项
+### 边界
 
 - 不跑正式 GA
-- 不继续 Phase 2/Phase 3
+- 不改 Candidate B 参数
 - 不改策略逻辑、撮合、风控、手续费、滑点
-- 不打开 pullback/rank_buffer
-- 不重建数据
-- 不为了 2023 年单独加规则
+- 不接券商、不自动下单
+- pullback_entry=False, rank_buffer=False
 
 ### 历史
 
-- 2026-05-13: baseline control 对齐 + smoke x2
-- 2026-05-13: pilot (pop=12, gen=3) 通过
-- 2026-05-13/14: Phase 1a/1b/1c 单参数扫描
-- 2026-05-14: Phase 2-mini 三维网格
-- 2026-05-14: Candidate B 验证 + 2023 诊断
-- 2026-05-14: Candidate B 升级为 new_candidate_baseline
-- 2026-05-14: Candidate B 3次跨进程可复现验证通过
+- 2026-05-13: baseline control 对齐 + smoke + pilot
+- 2026-05-13/14: Phase 1a/1b/1c + Phase 2-mini
+- 2026-05-14: Candidate B 验证 + 升级 + 稳定性检查
+- 2026-05-14: daily signal workflow + 数据增量更新
