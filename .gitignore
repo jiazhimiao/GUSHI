@@ -4,6 +4,9 @@ data/clean/
 data/factors/
 data/backtest/
 
+# Daily signal reports (run outputs, regeneratable)
+reports/daily_signal/
+
 # Experiment outputs (large, regeneratable)
 data/ga_results/
 data/experiments/
