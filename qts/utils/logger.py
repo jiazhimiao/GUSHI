@@ -3,11 +3,18 @@ import sys
 from pathlib import Path
 from loguru import logger as _logger
 
+# Force UTF-8 on Windows terminals to avoid garbled Chinese output
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 _logger.remove()
 _logger.add(
     sys.stderr,
     format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>",
     level="INFO",
+    colorize=False,  # disable ANSI on Windows to avoid double-encoding issues
 )
 
 

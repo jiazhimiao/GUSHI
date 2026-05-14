@@ -50,8 +50,34 @@ A 股数据
 当前项目已经进入：
 
 ```text
-MVP 1：本地回测系统阶段
+MVP 1：本地回测系统阶段（Candidate B 升级为 new_candidate_baseline）
 ```
+
+### 当前基线: Candidate B (new_candidate_baseline)
+
+```
+total_return ≈ 84.10%     max_drawdown ≈ -8.56%     GA fitness = 2.304
+total_trades = 1137        exposure ≈ 18.7%          avg_position ≈ 3.92%
+score_high = 0.80          atr_bear = 0.89           breakout_bear = 40
+enable_pullback_entry = False  enable_rank_buffer = False  use_dow_filter = False
+data hash: historical_constituents MD5 = c79f9f1649895c897af28961e5d3c1fb
+```
+
+### Historical A Baseline（参考）
+
+```
+total_return ≈ 83.07%     max_drawdown ≈ -8.06%     Calmar ≈ 0.97
+total_trades = 1231        score_high = 0.72         atr_bear = 1.19
+```
+
+### 重要边界
+
+- pullback_entry / rank_buffer 默认关闭（research-only）
+- F/D1/D2/D3 实验均未进入主策略
+- 不要重建 historical_constituents.json
+- 不要改撮合、风控、手续费、滑点、T+1、涨跌停
+- 不要正式大 GA
+- 不要为了 2023 年单独修策略（已知 B 在 2023 年弱于 A，是 score_high=0.80 的自然代价）
 
 当前已有基础能力包括：
 
@@ -277,6 +303,58 @@ taskkill /F /IM *
 ```
 
 调试时应尽量保留错误输出。
+
+### 6.6 实验输出与结果读取规范
+
+长任务、回测、GA、实验、诊断必须把结果保存到项目目录下的结构化文件。
+
+**结果必须保存为项目文件**：
+
+优先保存为：
+- `summary.csv` / `summary.json`
+- `candidates.json`
+- `report.md`
+- `metrics.json`
+- `config.json`
+- `progress.json`
+
+不允许只打印到终端，不允许只有临时文件。
+
+**GA / 回测 / 大实验必须保存**：
+- config、seed、data hash
+- candidate genes、metrics、fitness decomposition
+- report、timestamp、output path
+
+**读取实验结果时，优先读取项目内正式输出文件**。
+
+禁止反复解析类似以下路径的临时文件：
+```
+C:\Users\...\AppData\Local\Temp\claude\...\tasks\*.output
+```
+
+**查看长任务进度时，不要解析 Claude 临时 task output**。
+长任务脚本应周期性写入：
+- `progress.json`
+- `latest_status.txt`
+- `running_summary.md`
+
+**尽量避免复杂 shell 组合命令**，尤其是：
+- `$()`、复杂管道 `|`、多层引号嵌套
+- `cygpath`
+- 对 Claude 临时目录的动态路径解析
+
+Windows 环境下优先使用 Python `pathlib` 处理路径，不依赖 `cygpath`。
+
+**需要统计输出时，优先写成项目内 Python 脚本**：
+- `scripts/report_ga_results.py`
+- `scripts/summarize_experiment.py`
+- `scripts/check_baseline.py`
+
+**临时脚本必须及时清理**（`tmp_*.py`、`_sweep_*.txt`、`_raw_output.txt` 等）。
+
+如确实必须运行复杂 shell 命令，先解释用途，并优先改为简单、可静态分析的命令或项目内脚本。
+
+默认不要为了读取结果而触发用户权限确认。正确做法是让实验脚本直接把结果写入项目文件，再读取这些文件。
 
 ---
 
@@ -894,6 +972,40 @@ A 股 T+1
 ```
 
 不允许为了让测试通过而删除测试。
+
+### 20.1 长时间运行任务必须先冒烟测试
+
+任何预计运行超过 30 分钟的优化/训练/批量任务，必须遵循：
+
+```text
+1. 先编写一个小样本冒烟测试脚本
+2. 最小参数运行（pop=6, gen=3, 短周期）
+3. 串行执行，打印每步诊断信息
+4. 验证完整 pipeline 无报错（无 KeyError、无 NaN、无 import 错误）
+5. 冒烟测试通过后才允许启动正式任务
+6. 正式任务启动后监控首批结果确认正常
+```
+
+原因：
+
+```text
+GA 优化曾因 bug 跑了 2 次都提前终止（11+5 小时白跑）。
+冒烟测试 5 分钟就能暴露同样的问题。
+禁止跳过冒烟测试直接跑正式任务。
+```
+
+实现参考：
+
+```bash
+python scripts/ga_smoke_test.py  # 小样本冒烟测试（~5 分钟）
+```
+
+冒烟测试必须覆盖的环节：
+
+```text
+配置生成 → 策略初始化 → 回测引擎 → 数据处理 → 
+绩效计算 → fitness 评分 → 结果汇总
+```
 
 ---
 

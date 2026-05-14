@@ -4,6 +4,22 @@ data/clean/
 data/factors/
 data/backtest/
 
+# Experiment outputs (large, regeneratable)
+data/ga_results/
+data/experiments/
+data/diagnosis/
+data/stability_check/
+
+# Temporary and debug files
+tmp_*.py
+_sweep_*.txt
+_raw_output*
+*_debug.*
+*.tmp
+
+# Local Claude settings (per-user, not project)
+.claude/settings.local.json
+
 # Environment and secrets
 .env
 .env.local

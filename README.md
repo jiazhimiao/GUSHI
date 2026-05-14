@@ -34,8 +34,22 @@
 当前项目已经进入：
 
 ```text
-MVP 1：本地回测系统阶段（已完成基础验证）
+MVP 1：本地回测系统阶段（Candidate B 升级为 new_candidate_baseline）
 ```
+
+**当前基线: Candidate B**
+
+| 指标 | 值 |
+|------|--:|
+| total_return | 84.10% |
+| annual_return | 7.90% |
+| max_drawdown | -8.56% |
+| GA fitness | 2.304 |
+| total_trades | 1137 |
+| score_high | 0.80 |
+| atr_bear | 0.89 |
+
+（Historical A baseline: 83.07% / -8.06% / 1.656）
 
 项目已经具备：
 - 基础数据、因子、策略、组合构建、回测引擎、绩效分析和 Streamlit 看板
@@ -446,11 +460,14 @@ pytest tests/ -v
 
 - [x] 未来函数检查
 - [x] 参数敏感性分析
-- [ ] 网格搜索最优参数（`scripts/param_robustness.py --mode grid`）
-- [ ] PSO / GA 参数优化
-- [ ] 样本外 Walk-forward 测试
-- [ ] 牛市 / 熊市 / 震荡市分段表现
-- [ ] 成分股偏差修正（运行时自动切换历史成分股）
+- [x] 幸存者偏差修正（Sina API 真实成分股，季度快照）
+- [x] 向量化突破检测（`_evaluate_breakout_batch`）
+- [x] 冒烟测试基础设施（`scripts/ga_smoke_test.py`）
+- [x] 确定性修复（cross-process reproducible baseline）
+- [x] 性能优化 P0/P1a（full backtest 1501s→110s，-93%）
+- [x] 分环境诊断系统（qts/diagnosis/ — market_regime, signal_report）
+- [x] F/D1/D2/D3 实验（rank buffer 冻结，pullback gate 未优于基线）
+- [ ] GA v2 参数优化（baseline control 对齐中，未正式启动）
 
 ### 下一步：MVP 2 模拟盘系统
 
@@ -549,8 +566,9 @@ pytest tests/ -v
 | 要求 | 状态 |
 |------|:--:|
 | Universe / Filter / Ranking 三层 | ✅ |
+| 历史成分股按年份过滤 | ✅ 引擎自动加载+过滤 |
 | 全部默认过滤规则 | ⚠️ 6/10 已实现 |
 | 回踩确认 | ❌ |
 | 假突破过滤 | ❌ |
 
-**更新于 2026-05-09，共 24 项待完成。**
+**更新于 2026-05-10。**

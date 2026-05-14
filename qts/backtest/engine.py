@@ -81,6 +81,7 @@ class BacktestEngine:
         rebalance_freq: str = "weekly",
         min_turnover: float = 0.0,
         factor_names: list[str] | None = None,
+        use_constituent_filter: bool = True,
     ):
         """Run the backtest.
 
@@ -89,42 +90,132 @@ class BacktestEngine:
             rebalance_freq: 'daily', 'weekly', or 'monthly'.
             min_turnover: Minimum portfolio turnover (0-1) to trigger rebalance.
             factor_names: List of factor names used by the strategy (for MomentumValueStrategy).
+            use_constituent_filter: If True, filter market data to historical index
+                constituents on each rebalance date. Set False for full-universe testing.
         """
         logger.info(f"Running backtest [{strategy.name}]: {self.start_date} to {self.end_date}")
         logger.info(f"Initial cash: {self.initial_cash:,.0f}, execution: {self.execution_price}")
 
-        # Survivorship bias warning
-        import json
-        const_path = Path(self.bar_path).parent.parent / "historical_constituents.json"
-        if not const_path.exists():
-            logger.warning("未找到历史成分股数据。当前回测使用最新成分股列表，存在幸存者偏差。")
-            logger.warning("建议运行: python scripts/build_historical_universe.py")
+        # ── Load historical constituents for survivorship bias correction ──
+        # Structure: {"indices": {"HS300": {"quarterly": {"2018-01-01": [...], ...}}}}
+        constituent_quarterly: dict[str, list[str]] = {}
+        if use_constituent_filter:
+            const_path = Path(self.bar_path).parent.parent / "historical_constituents.json"
+            if const_path.exists():
+                with open(const_path) as f:
+                    const_data = json.load(f)
+                # Detect which index from data path (e.g. "HS300_daily.parquet" → "HS300")
+                index_name = Path(self.bar_path).stem.replace("_daily", "")
+                index_entry = const_data.get("indices", {}).get(index_name)
+                if index_entry:
+                    # Sort by date, build lookup: trade_date → nearest prior quarterly snapshot
+                    quarterly = index_entry["quarterly"]
+                    sorted_dates = sorted(quarterly.keys())
+                    constituent_quarterly = quarterly  # {date_str: [symbols]}
+                    logger.info(
+                        f"已加载历史成分股: {index_name} "
+                        f"({len(sorted_dates)} 期, {sorted_dates[0]} ~ {sorted_dates[-1]})"
+                    )
+                else:
+                    logger.warning(f"未找到 {index_name} 的成分股数据，使用全部股票")
+                    use_constituent_filter = False
+            else:
+                logger.warning("未找到 historical_constituents.json，使用全部股票")
+                use_constituent_filter = False
         self._strategy_ref = strategy  # for _update_entry_peaks
         strategy_peak = self.initial_cash  # track strategy-level peak for circuit breaker
 
-        # Pre-compute factors (always done; unused strategies just ignore factor_data)
-        prices = load_bars_pivot(self.bar_path, "close", self.start_date, self.end_date)
-        volumes = load_bars_pivot(self.bar_path, "volume", self.start_date, self.end_date)
+        # Load pivot matrices from already-loaded bars (avoids 3x parquet re-reads)
+        prices = self.bars.pivot(index="trade_date", columns="symbol", values="close")
+        volumes = self.bars.pivot(index="trade_date", columns="symbol", values="volume")
+        highs = self.bars.pivot(index="trade_date", columns="symbol", values="high")
+        opens = self.bars.pivot(index="trade_date", columns="symbol", values="open")
+        lows = self.bars.pivot(index="trade_date", columns="symbol", values="low")
         logger.info(f"Price matrix: {prices.shape}")
 
-        self.factor_engine.register("momentum_20d", momentum_factor, {"period": 20})
-        self.factor_engine.register("volatility_60d", volatility_factor, {"period": 60})
-        self.factor_engine.register("turnover_ratio", turnover_factor, {"period": 20}, depends_on="volume")
-        factor_long = self.factor_engine.compute_as_long(prices, volumes)
-        logger.info(f"Factor data: {factor_long.shape}")
+        if not getattr(strategy, 'skip_portfolio_construction', False):
+            self.factor_engine.register("momentum_20d", momentum_factor, {"period": 20})
+            self.factor_engine.register("volatility_60d", volatility_factor, {"period": 60})
+            self.factor_engine.register("turnover_ratio", turnover_factor, {"period": 20}, depends_on="volume")
+            factor_long = self.factor_engine.compute_as_long(prices, volumes)
+            logger.info(f"Factor data: {factor_long.shape}")
+        else:
+            factor_long = pd.DataFrame()
 
         # Pre-compute market breadth (vectorized, for TrendBreakoutStrategy)
-        bma = getattr(strategy, 'breadth_ma_days', 30)
-        ma_breadth = prices.rolling(bma).mean()
-        breadth_series = (prices > ma_breadth).mean(axis=1)  # % of stocks above N-day MA per date
+        # Use same constituent filter as market data if enabled
+        if use_constituent_filter and constituent_quarterly:
+            # Pick first quarterly snapshot that covers the data range
+            sorted_dates = sorted(constituent_quarterly.keys())
+            ref_date = str(self.start_date)
+            breadth_symbols = None
+            for q_date in reversed(sorted_dates):
+                if q_date <= ref_date:
+                    breadth_symbols = constituent_quarterly[q_date]
+                    break
+            if breadth_symbols:
+                b_cols = [c for c in breadth_symbols if c in prices.columns]
+                prices_b = prices[b_cols]
+                bma = getattr(strategy, 'breadth_ma_days', 30)
+                ma_breadth = prices_b.rolling(bma).mean()
+                breadth_series = (prices_b > ma_breadth).mean(axis=1)
+            else:
+                bma = getattr(strategy, 'breadth_ma_days', 30)
+                ma_breadth = prices.rolling(bma).mean()
+                breadth_series = (prices > ma_breadth).mean(axis=1)
+        else:
+            bma = getattr(strategy, 'breadth_ma_days', 30)
+            ma_breadth = prices.rolling(bma).mean()
+            breadth_series = (prices > ma_breadth).mean(axis=1)
         if hasattr(strategy, '_breadth_cache'):
             strategy._breadth_cache = breadth_series
+            strategy._prices_pivot = prices
+            strategy._volumes_pivot = volumes
+            strategy._highs_pivot = highs
+            strategy._opens_pivot = opens
+            strategy._lows_pivot = lows
             # Pre-index bars by symbol for fast lookup
             strategy._bars_by_symbol = {
                 sym: group.sort_values("trade_date")
                 for sym, group in self.bars.groupby("symbol")
             }
-            logger.info(f"Breadth + bars cache ready")
+
+        # ── Pre-index bars by date (P0 optimization: avoid daily full-table filter) ──
+        # Convert trade_date to string for consistent lookup with cal_dates
+        if "trade_date" in self.bars.columns:
+            self._bars_by_date = {}
+            for td, grp in self.bars.groupby("trade_date", sort=False):
+                self._bars_by_date[str(td)[:10]] = grp
+            logger.info("bars_by_date cache ready")
+
+            # Pre-compute regime dimensions (once, then lookup by date)
+            if hasattr(strategy, '_regime_raw_cache'):
+                # Use same columns as breadth (constituent-filtered or full)
+                b_cols = prices_b.columns if 'prices_b' in dir() else prices.columns
+                prices_r = prices[b_cols] if 'prices_b' in dir() else prices
+                volumes_r = volumes[b_cols] if 'prices_b' in dir() else volumes
+
+                # Trend: median 20-day return, normalized to [0,1]
+                rets_20 = prices_r.pct_change(20, fill_method=None)
+                trend_series = (rets_20.median(axis=1) / 0.05).clip(0, 1)
+
+                # Stability: 1 - (20d vol / 60d vol)
+                rets_daily = prices_r.pct_change(fill_method=None)
+                vol_20 = rets_daily.rolling(20).std().median(axis=1)
+                vol_60 = rets_daily.rolling(60).std().median(axis=1)
+                stability_series = (1.0 - ((vol_20 / vol_60.replace(0, np.nan)) - 0.5).clip(0, 1)).fillna(0.5)
+
+                # Volume energy: 20d avg / 60d avg
+                vol_mean_20 = volumes_r.rolling(20).mean().median(axis=1)
+                vol_mean_60 = volumes_r.rolling(60).mean().median(axis=1)
+                volume_series = (((vol_mean_20 / vol_mean_60.replace(0, np.nan)) - 0.7) / 0.6).clip(0, 1).fillna(0.5)
+
+                strategy._regime_raw_cache = {
+                    "trend": trend_series,
+                    "stability": stability_series,
+                    "volume": volume_series,
+                }
+                logger.info(f"Breadth + bars + pivots + regime cache ready")
 
         # Generate rebalance dates
         rebalance_dates = generate_rebalance_dates(
@@ -177,10 +268,30 @@ class BacktestEngine:
                 self.broker.end_of_day()
                 continue
 
+            # ── Filter market data to historical constituents for this date ──
+            if use_constituent_filter and constituent_quarterly:
+                date_str = str(pd.Timestamp(date).date())
+                sorted_dates = sorted(constituent_quarterly.keys())
+                # Find most recent quarterly snapshot <= date
+                allowed = None
+                for q_date in reversed(sorted_dates):
+                    if q_date <= date_str:
+                        allowed = constituent_quarterly[q_date]
+                        break
+                if allowed is None:
+                    allowed = constituent_quarterly[sorted_dates[0]]
+                if getattr(strategy, 'use_dow_filter', False):
+                    market_data_filtered = self.bars[self.bars["symbol"].isin(allowed)]
+                else:
+                    today_bars = self._bars_by_date.get(date, self.bars.iloc[:0])
+                    market_data_filtered = today_bars[today_bars["symbol"].isin(allowed)]
+            else:
+                market_data_filtered = self.bars
+
             # Generate signals (using today's close data, as you would after market close)
             signals = strategy.generate_signals(
                 current_date=date,
-                market_data=self.bars,
+                market_data=market_data_filtered,
                 factor_data=factor_long,
                 current_positions=self.broker.get_all_positions(),
             )
@@ -238,7 +349,7 @@ class BacktestEngine:
         if positions.empty:
             return
 
-        latest_bars = self.bars[self.bars["trade_date"] == date]
+        latest_bars = self._bars_by_date.get(str(date)[:10], self.bars.iloc[:0])
         if latest_bars.empty:
             return
         price_map = dict(zip(latest_bars["symbol"], latest_bars["close"]))
@@ -278,7 +389,7 @@ class BacktestEngine:
 
     def _update_entry_peaks(self, date: str, entry_peaks: dict[str, float]):
         """Update entry_peaks and strategy._entry_prices for new positions."""
-        latest_bars = self.bars[self.bars["trade_date"] == date]
+        latest_bars = self._bars_by_date.get(str(date)[:10], self.bars.iloc[:0])
         if latest_bars.empty:
             return
         positions = self.broker.get_all_positions()
@@ -298,7 +409,7 @@ class BacktestEngine:
 
         Returns a value in [0, 1] where 0.30 means 30% of portfolio needs to change.
         """
-        latest_bars = self.bars[self.bars["trade_date"] == date]
+        latest_bars = self._bars_by_date.get(str(date)[:10], self.bars.iloc[:0])
         if latest_bars.empty:
             return 1.0
 
@@ -333,7 +444,7 @@ class BacktestEngine:
             use_open: If True, use today's open price (next_open mode).
                       If False, use today's close price (close mode).
         """
-        latest_bars = self.bars[self.bars["trade_date"] == date]
+        latest_bars = self._bars_by_date.get(str(date)[:10], self.bars.iloc[:0])
 
         # Get execution prices
         price_map = {}
@@ -353,8 +464,16 @@ class BacktestEngine:
 
         total_value = self.broker.get_total_value(price_map)
 
+        # Helper: add signal metadata to a fill dict (does not alter execution)
+        def _annotate_fill(fill_dict, sym):
+            row = target[target["symbol"] == sym]
+            if not row.empty:
+                fill_dict["reason"] = str(row.iloc[0].get("reason", ""))
+                fill_dict["score"] = float(row.iloc[0].get("score", 0.0))
+            return fill_dict
+
         # Sell: stocks in current but not in target
-        for sym in current_symbols - target_symbols:
+        for sym in sorted(current_symbols - target_symbols):
             pos = current_positions[current_positions["symbol"] == sym]
             if len(pos) == 0:
                 continue
@@ -367,7 +486,7 @@ class BacktestEngine:
                     self.trades.append(fill)
 
         # Adjust: stocks in both
-        for sym in current_symbols & target_symbols:
+        for sym in sorted(current_symbols & target_symbols):
             if sym not in price_map:
                 continue
             pos = current_positions[current_positions["symbol"] == sym].iloc[0]
@@ -389,10 +508,10 @@ class BacktestEngine:
                     price_map[sym], limit_up_map.get(sym, 9999), date,
                 )
                 if fill:
-                    self.trades.append(fill)
+                    self.trades.append(_annotate_fill(fill, sym))
 
         # Buy: stocks in target but not in current
-        for sym in target_symbols - current_symbols:
+        for sym in sorted(target_symbols - current_symbols):
             if sym not in price_map:
                 continue
             target_value = total_value * target_weight_map.get(sym, 0)
@@ -400,11 +519,11 @@ class BacktestEngine:
                 sym, target_value, price_map[sym], limit_up_map.get(sym, 9999), date
             )
             if fill:
-                self.trades.append(fill)
+                self.trades.append(_annotate_fill(fill, sym))
 
     def _mark_to_market(self, date: str):
         """Record NAV and positions at current date."""
-        latest_bars = self.bars[self.bars["trade_date"] == date]
+        latest_bars = self._bars_by_date.get(str(date)[:10], self.bars.iloc[:0])
         if latest_bars.empty:
             return
 
