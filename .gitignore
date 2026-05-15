@@ -9,7 +9,9 @@ data/paper_trading/
 
 # Daily signal reports (run outputs, regeneratable)
 reports/daily_signal/
+reports/paper_trading/
 reports/update_failed_symbols_*.json
+reports/paper_data_repair_blocked_*.json
 
 # Experiment outputs (large, regeneratable)
 data/ga_results/
