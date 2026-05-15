@@ -125,13 +125,21 @@ class BacktestEngine:
         self._strategy_ref = strategy  # for _update_entry_peaks
         strategy_peak = self.initial_cash  # track strategy-level peak for circuit breaker
 
-        # Load pivot matrices from already-loaded bars (avoids 3x parquet re-reads)
-        prices = self.bars.pivot(index="trade_date", columns="symbol", values="close")
-        volumes = self.bars.pivot(index="trade_date", columns="symbol", values="volume")
-        highs = self.bars.pivot(index="trade_date", columns="symbol", values="high")
-        opens = self.bars.pivot(index="trade_date", columns="symbol", values="open")
-        lows = self.bars.pivot(index="trade_date", columns="symbol", values="low")
-        logger.info(f"Price matrix: {prices.shape}")
+        # ── Unified DataContext (shared with paper trading replay) ──
+        from qts.backtest.data_context import build_strategy_context
+
+        ctx = build_strategy_context(
+            bar_path=self.bar_path,
+            calendar_path=self.calendar_path,
+            start_date=str(self.start_date),
+            end_date=str(self.end_date),
+            use_constituent_filter=use_constituent_filter,
+        )
+        prices = ctx.prices
+        volumes = ctx.volumes
+        highs = ctx.highs
+        opens = ctx.opens
+        lows = ctx.lows
 
         if not getattr(strategy, 'skip_portfolio_construction', False):
             self.factor_engine.register("momentum_20d", momentum_factor, {"period": 20})
@@ -142,80 +150,15 @@ class BacktestEngine:
         else:
             factor_long = pd.DataFrame()
 
-        # Pre-compute market breadth (vectorized, for TrendBreakoutStrategy)
-        # Use same constituent filter as market data if enabled
-        if use_constituent_filter and constituent_quarterly:
-            # Pick first quarterly snapshot that covers the data range
-            sorted_dates = sorted(constituent_quarterly.keys())
-            ref_date = str(self.start_date)
-            breadth_symbols = None
-            for q_date in reversed(sorted_dates):
-                if q_date <= ref_date:
-                    breadth_symbols = constituent_quarterly[q_date]
-                    break
-            if breadth_symbols:
-                b_cols = [c for c in breadth_symbols if c in prices.columns]
-                prices_b = prices[b_cols]
-                bma = getattr(strategy, 'breadth_ma_days', 30)
-                ma_breadth = prices_b.rolling(bma).mean()
-                breadth_series = (prices_b > ma_breadth).mean(axis=1)
-            else:
-                bma = getattr(strategy, 'breadth_ma_days', 30)
-                ma_breadth = prices.rolling(bma).mean()
-                breadth_series = (prices > ma_breadth).mean(axis=1)
-        else:
-            bma = getattr(strategy, 'breadth_ma_days', 30)
-            ma_breadth = prices.rolling(bma).mean()
-            breadth_series = (prices > ma_breadth).mean(axis=1)
-        if hasattr(strategy, '_breadth_cache'):
-            strategy._breadth_cache = breadth_series
-            strategy._prices_pivot = prices
-            strategy._volumes_pivot = volumes
-            strategy._highs_pivot = highs
-            strategy._opens_pivot = opens
-            strategy._lows_pivot = lows
-            # Pre-index bars by symbol for fast lookup
-            strategy._bars_by_symbol = {
-                sym: group.sort_values("trade_date")
-                for sym, group in self.bars.groupby("symbol")
-            }
+        # Apply context caches to strategy
+        ctx.apply_to_strategy(strategy)
 
-        # ── Pre-index bars by date (P0 optimization: avoid daily full-table filter) ──
-        # Convert trade_date to string for consistent lookup with cal_dates
-        if "trade_date" in self.bars.columns:
-            self._bars_by_date = {}
-            for td, grp in self.bars.groupby("trade_date", sort=False):
-                self._bars_by_date[str(td)[:10]] = grp
-            logger.info("bars_by_date cache ready")
+        # Copy bars_by_date from context to engine
+        self._bars_by_date = ctx.bars_by_date
 
-            # Pre-compute regime dimensions (once, then lookup by date)
-            if hasattr(strategy, '_regime_raw_cache'):
-                # Use same columns as breadth (constituent-filtered or full)
-                b_cols = prices_b.columns if 'prices_b' in dir() else prices.columns
-                prices_r = prices[b_cols] if 'prices_b' in dir() else prices
-                volumes_r = volumes[b_cols] if 'prices_b' in dir() else volumes
-
-                # Trend: median 20-day return, normalized to [0,1]
-                rets_20 = prices_r.pct_change(20, fill_method=None)
-                trend_series = (rets_20.median(axis=1) / 0.05).clip(0, 1)
-
-                # Stability: 1 - (20d vol / 60d vol)
-                rets_daily = prices_r.pct_change(fill_method=None)
-                vol_20 = rets_daily.rolling(20).std().median(axis=1)
-                vol_60 = rets_daily.rolling(60).std().median(axis=1)
-                stability_series = (1.0 - ((vol_20 / vol_60.replace(0, np.nan)) - 0.5).clip(0, 1)).fillna(0.5)
-
-                # Volume energy: 20d avg / 60d avg
-                vol_mean_20 = volumes_r.rolling(20).mean().median(axis=1)
-                vol_mean_60 = volumes_r.rolling(60).mean().median(axis=1)
-                volume_series = (((vol_mean_20 / vol_mean_60.replace(0, np.nan)) - 0.7) / 0.6).clip(0, 1).fillna(0.5)
-
-                strategy._regime_raw_cache = {
-                    "trend": trend_series,
-                    "stability": stability_series,
-                    "volume": volume_series,
-                }
-                logger.info(f"Breadth + bars + pivots + regime cache ready")
+        # Use context's constituent data
+        constituent_quarterly = ctx.constituent_quarterly
+        breadth_series = ctx.breadth_series
 
         # Generate rebalance dates
         rebalance_dates = generate_rebalance_dates(
