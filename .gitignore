@@ -4,8 +4,12 @@ data/clean/
 data/factors/
 data/backtest/
 
+# Paper trading runtime state (daily, regeneratable)
+data/paper_trading/
+
 # Daily signal reports (run outputs, regeneratable)
 reports/daily_signal/
+reports/update_failed_symbols_*.json
 
 # Experiment outputs (large, regeneratable)
 data/ga_results/
@@ -22,6 +26,7 @@ _raw_output*
 
 # Local Claude settings (per-user, not project)
 .claude/settings.local.json
+.claude/hooks/
 
 # Environment and secrets
 .env

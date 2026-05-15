@@ -1,4 +1,5 @@
 """AKShare market data client."""
+import time
 from abc import ABC, abstractmethod
 import pandas as pd
 
@@ -31,8 +32,13 @@ class AKShareClient(MarketDataProvider):
     suspension status, and price limit information.
     """
 
-    def __init__(self):
+    def __init__(self, rate_limit: float = 0.8, retries: int = 2, circuit_breaker: int = 10):
         self._stock_basic_cache: pd.DataFrame | None = None
+        self._rate_limit = rate_limit
+        self._retries = retries
+        self._circuit_breaker = circuit_breaker
+        self.last_failed_symbols: list[str] = []
+        self.last_skipped_symbols: list[str] = []
 
     def get_stock_basic(self) -> pd.DataFrame:
         """Get basic stock info (code, name, list date, industry)."""
@@ -74,20 +80,59 @@ class AKShareClient(MarketDataProvider):
         start = start_date.replace("-", "")
         end = end_date.replace("-", "")
 
+        n = len(symbols)
+        logger.info(f"Fetching bars for {n} symbols (rate limit: {self._rate_limit}s, "
+                    f"retries: {self._retries}, circuit_breaker: {self._circuit_breaker})")
+
+        self.last_failed_symbols = []
+        self.last_skipped_symbols = []
         frames = []
-        for sym in symbols:
-            try:
-                df = self._fetch_single(sym, start, end, adjusted)
-                if len(df) > 0:
-                    frames.append(df)
-            except Exception as e:
-                logger.warning(f"Failed to fetch {sym}: {e}")
+        consecutive_failures = 0
+
+        for i, sym in enumerate(symbols):
+            circuit_tripped = False
+            for attempt in range(self._retries + 1):
+                try:
+                    df = self._fetch_single(sym, start, end, adjusted)
+                    if len(df) > 0:
+                        frames.append(df)
+                    consecutive_failures = 0  # reset on success
+                    break
+                except Exception as e:
+                    if attempt < self._retries:
+                        time.sleep(1.0)
+                    else:
+                        logger.warning(f"Failed to fetch {sym} after {self._retries + 1} attempts: {e}")
+                        self.last_failed_symbols.append(sym)
+                        consecutive_failures += 1
+
+                        if consecutive_failures >= self._circuit_breaker:
+                            remaining = symbols[i + 1:]
+                            self.last_skipped_symbols = list(remaining)
+                            logger.error(
+                                f"Circuit breaker tripped: {consecutive_failures} consecutive failures. "
+                                f"Likely IP ban or provider blocking. "
+                                f"Skipping remaining {len(remaining)} symbols."
+                            )
+                            circuit_tripped = True
+                            break
+            if circuit_tripped:
+                break
+
+            if i < n - 1:
+                time.sleep(self._rate_limit)
 
         if not frames:
             return pd.DataFrame()
 
-        result = pd.concat(frames, ignore_index=True)
-        logger.info(f"Fetched {len(result)} bars for {len(frames)}/{len(symbols)} symbols")
+        result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        n_failed = len(self.last_failed_symbols)
+        n_skipped = len(self.last_skipped_symbols)
+        summary = (f"Fetched {len(result)} bars for {len(frames)}/{len(symbols)} symbols"
+                   + (f", {n_failed} failed" if n_failed else ""))
+        if n_skipped > 0:
+            summary += f" ({n_skipped} skipped by circuit breaker)"
+        logger.info(summary)
         return result
 
     def _fetch_single(

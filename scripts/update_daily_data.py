@@ -1,7 +1,14 @@
-"""Daily data update script.
+"""LEGACY — 全量覆盖脚本。日常使用禁止！
 
-Usage:
-    python scripts/update_daily_data.py
+此脚本从 API 拉取全量成分股数据并直接覆盖 parquet。
+不做旧数据 0 变化校验，不做增量合并，不做备份。
+
+日常更新必须使用：
+    python scripts/incremental_update_data.py --start YYYY-MM-DD --end YYYY-MM-DD
+
+此脚本仅保留用于首次全量拉取或灾难恢复重建。日常运行可能覆盖已有正确数据。
+
+Usage (仅重建场景):
     python scripts/update_daily_data.py --start 2020-01-01 --end 2024-12-31 --universe HS300
 """
 import argparse
@@ -57,24 +64,40 @@ def main():
 
     # 2. Get symbols
     if args.symbols:
-        symbols = args.symbols
+        symbols = set(args.symbols)
     else:
         fetcher = UNIVERSE_FETCHERS.get(args.universe)
         if fetcher is None:
             logger.error(f"Unknown universe: {args.universe}")
             sys.exit(1)
         try:
-            symbols = fetcher()
+            symbols = set(fetcher())
         except Exception as e:
             bar_file = root / f"data/raw/{args.universe}_daily.parquet"
             if bar_file.exists():
                 import pandas as pd
-                symbols = pd.read_parquet(bar_file)["symbol"].unique().tolist()
+                symbols = set(pd.read_parquet(bar_file)["symbol"].unique().tolist())
                 logger.warning(f"Failed to fetch constituent list ({e}), using {len(symbols)} existing symbols")
             else:
                 logger.error(f"Cannot get symbols and no existing data file: {e}")
                 sys.exit(1)
         logger.info(f"=== Step 2: {args.universe} Universe ({len(symbols)} stocks) ===")
+    # Always include paper trading positions (to ensure held stocks get updated data)
+    paper_pos_path = root / "data/paper_trading/paper_positions.json"
+    if paper_pos_path.exists():
+        try:
+            import json as _json
+            paper_positions = _json.load(open(paper_pos_path))
+            paper_syms = {p["symbol"] for p in paper_positions if p.get("quantity", 0) > 0}
+            if paper_syms:
+                n_before = len(symbols)
+                symbols |= paper_syms
+                n_added = len(symbols) - n_before
+                if n_added > 0:
+                    logger.info(f"Added {n_added} paper position symbols: {sorted(paper_syms - (symbols - paper_syms))}")
+        except Exception as e:
+            logger.warning(f"Could not read paper positions: {e}")
+    symbols = sorted(symbols)
 
     # 3. Fetch bars
     logger.info("=== Step 3: Fetching Daily Bars ===")
