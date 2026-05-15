@@ -1,131 +1,77 @@
-# EXECUTION.md — 本轮已完成工作总结
+# EXECUTION.md — 本轮会话执行总结
 
-> 更新: 2026-05-14
+> 会话: 2026-05-14 ~ 2026-05-15
 
-## Candidate B 稳定性验证
+## 用户本轮目标
 
-- 3 次跨进程运行 Candidate B，全部指标、nav_hash、trades_hash 完全一致
-- 稳定性检查: **PASSED**
-- 结果保存在 `data/ga_results/candidate_b_final_check_20260514_124500/`
+1. 推进 paper trading 连续模拟 → paper-mode 日常运行
+2. 使 replay 对齐 BacktestEngine
+3. 实现 PaperBroker 执行层
+4. 建立 paper-mode 每日状态持久化
+5. 修复数据更新脚本
 
-## 确定性修复
+## 本轮实际完成
 
-- 问题: `set` 迭代顺序受 PYTHONHASHSEED 影响，跨进程回测不可复现
-- 修复: engine.py 三处 `set` 运算加 `sorted()`；trend_breakout.py 所有 score 排序加 symbol tie-breaker
-- 验证: 3 次跨进程 A 运行全部一致（83.07%, 1231 trades）
+### 1. DataContext 统一 (`qts/backtest/data_context.py`)
+- 创建统一数据上下文模块，pivot/breadth/cache 一次性计算
+- BacktestEngine 和 replay 共享同一套缓存
+- 消除了 regime_score 系统性偏差
+- 修复 `pct_change(fill_method=None)` 确保回测结果不变
 
-## 实验矩阵 (F/D1/D2/D3)
+### 2. PaperBroker 执行层 (`qts/backtest/paper_broker.py`)
+- 模拟 BrokerSimulator：quantity/lot_size/commission/stamp_tax/T+1
+- check_and_execute_exits：每日 exit check 在 signal 前执行
+- execute_weight_rebalance：weight → quantity 转换
+- 交易事件与 BacktestEngine 100% 对齐（30/30 matching events）
+- ATR exit 复现：688047 on 01-13 完全一致
 
-| 实验 | 结论 |
-|:--:|------|
-| F (rank buffer) | holding_scores 方向错误，收益崩溃，冻结 |
-| D1 (pullback V1) | 分支未进入（regime条件bug），无效 |
-| D2 (pullback no gate) | 组合层失败，伤害2023/2024，冻结 |
-| D3 (pullback + gate) | gate 平台稳定但未优于A，不通过 |
+### 3. paper-mode 日常工作流
+- `--paper-mode --date YYYY-MM-DD`：单日生产运行
+- 状态持久化：data/paper_trading/paper_state.json/papers/trades/NAV
+- 安全检查：重复日期拒绝、data hash 校验、--force 覆写
 
-## 性能优化
+### 4. Stale price tracking
+- 持仓行情缺失时回退到最近可用收盘价
+- paper_nav.csv：stale_position_count, stale_symbols, stale_position_value, price_status
+- signal JSON：paper_positions_price_info（close/price_date/is_stale/stale_days/price_source）
 
-| 阶段 | 耗时 | 累计降幅 |
-|------|--:|--:|
-| 原始 | 1501s (25m) | — |
-| P0 (日期索引) | 554s (9.2m) | -63% |
-| P1a (调仓日过滤) | 110s (1.8m) | **-93%** |
-| P2 | 暂缓 | 收益递减 |
+### 5. 数据更新脚本整理
+- incremental_update_data.py → 正式入口（增量/备份/dedup/完整性/hash）
+- update_daily_data.py → LEGACY 标记（禁止日常使用）
 
-## GA v2 开发
+### 6. Regime score 对齐
+- 根因：报告用 p_slice 调 compute_score，策略用 _regime_raw_cache fast path
+- 修复：报告复用 fast path，score 与策略完全一致
 
-### Baseline 对齐
+### 7. NAV position_value 修复
+- price_map 从 bars_by_date 全量构建 + 缺价格时回退到最近收盘价
 
-- **问题**: `BASELINE_GENES` 中 5 个策略参数使用了 TrendBreakoutStrategy 类默认值而非 JSON best_genes 优化值
-- **修复**: 对齐为 GA JSON 中的真实 best_genes 值
-- **验证**: `ga_optimizer_v2.py --baseline-only` 完全复现 A baseline
+## 修改的文件
 
-### Smoke 验证
+| 文件 | 操作 |
+|------|------|
+| qts/backtest/data_context.py | 新增 |
+| qts/backtest/paper_broker.py | 新增 |
+| scripts/generate_daily_signal.py | 大幅修改 |
+| scripts/check_alignment.py | 新增 |
+| scripts/diagnose_paper_trading.py | 新增 |
+| scripts/diagnose_replay_vs_backtest.py | 新增 |
+| scripts/incremental_update_data.py | 修改 |
+| scripts/update_daily_data.py | 修改 |
+| qts/backtest/engine.py | 修改 |
+| .gitignore | 修改 |
+| .claude/settings.local.json | 修改 |
+| .claude/hooks/notify.ps1 | 新增 |
 
-- 两次 `--smoke --seed 42` 完全可复现
-- baseline fitness = 1.656
+## 已验证结论
 
-### Pilot GA
+- BacktestEngine vs PaperBroker replay：交易事件 100% 对齐（30/30）
+- Regime score：报告与策略一致
+- 88% 一日持仓是真实策略行为（非 replay bug）
+- 601689/603392 有真实行情（非停牌），本地缺失是更新脚本未拉取
 
-- 配置: pop=12, gen=3, workers=4, seed=42
-- 结论: 无 candidate 超过 baseline (fitness=1.656)
-- 加入 gene_hash 去重/缓存
+## 未解决问题
 
-## 局部搜索
-
-### Phase 1a: 单参数邻域扫描 (10 params, 45 candidates)
-
-- **发现**: breakout_bear=35 是最强单参数改进 (fitness=1.960, +0.304)
-- 多个参数存在贴边最优
-
-### Phase 1b: 边界外扩 + 验证 (6+1 params, 27 candidates)
-
-- **发现**: score_high=0.80 超越 breakout_bear 成为 #1 (fitness=2.017, +0.361)
-- 但 score_high=0.80 仍贴 PARAM_BOUNDS 上界
-
-### Phase 1c: score_high 外扩 + support_bear 深探 (2 params, 15 candidates)
-
-- **确认**: score_high=0.80 是明确的内部最优（外扩到 0.90 后趋势下降）
-- support_bear=3 小幅改善 (+0.053)
-
-### Phase 2-mini: Top 3 三维网格 (3×3×3=27 combos)
-
-- **发现**: sh=0.80 + ab=0.89 双参数组合 fitness=2.304 (+0.648)
-- Calmar 从 1.244 提升到 1.720 (+38%)
-- breakout_bear=35 与 score_high=0.80 冲突（单独好但组合差）
-
-## Candidate B 验证
-
-### 标准验证
-
-| 指标 | A baseline | Candidate B | Δ |
-|---|:---:|:---:|:---:|
-| total_return | 83.07% | 84.10% | +1.03% |
-| annual_return | 7.82% | 7.90% | +0.08% |
-| max_drawdown | -8.06% | -8.56% | -0.50% |
-| GA fitness | 1.656 | 2.304 | +0.648 |
-| no_2024 | 14.91% | 17.96% | +3.05% |
-| trades | 1231 | 1137 | -94 |
-
-### 压力测试
-
-所有压力测试（手续费×2、滑点×2、两者×2）B 均优于 A，且优势在极端压力下扩大。
-
-### 2023 专项诊断
-
-- B 在 2023 年退步 -2.64%（A +0.93% vs B -1.71%）
-- 根因: 2023 年 2 月差异 -2.66%，score_high=0.80 过滤掉了反弹票
-- 不是 bug，是更严格过滤的自然代价
-- 不为此单独修策略
-
-## Candidate B 升级
-
-- A baseline → historical_baseline
-- Candidate B → new_candidate_baseline
-- 参数: score_high=0.80, atr_bear=0.89, breakout_bear=40
-
-## CLAUDE.md 更新
-
-- 新增 §6.6 实验输出与结果读取规范
-
-## 当前未解决问题
-
-1. Candidate B 需要最终稳定性检查
-2. 2023 年 B 弱于 A 是已知代价，无需修补
-3. pullback entry 在 D3 中未能稳定优于 A
-4. 2019/2020 exposure 极低
-
-## 关键文件
-
-```
-qts/backtest/engine.py                  — P0+P1a+determinism
-qts/strategies/trend_breakout.py         — pullback/rank buffer (default off)
-scripts/ga_optimizer_v2.py               — smoke + pilot + Phase 1a/1b/1c + Phase 2-mini
-scripts/validate_candidate_b.py          — Candidate B 验证（含压力测试）
-scripts/diagnose_2023.py                 — 2023 专项诊断
-data/historical_constituents.json         — MD5 locked
-data/ga_results/local_search_phase1c_*   — score_high 外扩结果
-data/ga_results/local_search_phase2mini_* — 三维网格结果
-data/ga_results/candidate_b_validation_* — B 验证包
-data/ga_results/candidate_b_2023_diagnosis_* — 2023 诊断
-```
+- AKShare ProxyError：601689/603392 05-09~05-15 行情未补拉
+- ATR exit 差异：3 笔 backtest exits 仅 1 笔被 PaperBroker 复现（entry_price 精度）
+- 未提交修改较多（7 modified + 6 untracked files）

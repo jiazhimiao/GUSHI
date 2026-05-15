@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paper Data Repair — Blocked Status 2026-05-15</title>
+<style>
+body { font-family: 'Segoe UI', system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; background: #f5f5f5; color: #333; }
+h1 { border-bottom: 3px solid #e74c3c; padding-bottom: 10px; }
+h2 { margin-top: 30px; color: #2c3e50; }
+.status-blocked { background: #fdecea; border-left: 4px solid #e74c3c; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+.status-ok { background: #eafaf1; border-left: 4px solid #27ae60; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #2c3e50; color: white; }
+tr:nth-child(even) { background: #fafafa; }
+.metric { font-family: 'Consolas', monospace; font-weight: bold; }
+.warn { color: #e67e22; }
+.bad { color: #e74c3c; }
+.good { color: #27ae60; }
+code { background: #eee; padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', monospace; }
+pre { background: #2c3e50; color: #ecf0f1; padding: 12px; border-radius: 4px; overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<h1>Paper Data Repair — Blocked Status</h1>
+<p><strong>Generated:</strong> 2026-05-15 | <strong>Status:</strong> <span class="bad">BLOCKED</span></p>
+
+<div class="status-blocked">
+<strong>Eastmoney IP Ban</strong> — All HTTP requests to push2his.eastmoney.com are TCP RST'd.
+The IP ban originates from 2619 rapid-fire requests earlier in the session (before rate-limiting was added).
+All HTTP libraries (AKShare/requests/urllib) and all User-Agent variants are affected equally.
+</div>
+
+<h2>1. Objective</h2>
+<p>Fill missing HS300 constituent daily bars for <code>2026-05-11</code> → <code>2026-05-15</code> (5 trading days).</p>
+
+<h2>2. Coverage Before Repair</h2>
+<table>
+<tr><th>Date</th><th>Constituents with Data</th><th>Coverage</th></tr>
+<tr><td>2026-05-11</td><td class="metric bad">53 / 280</td><td>18.9%</td></tr>
+<tr><td>2026-05-12</td><td class="metric bad">53 / 280</td><td>18.9%</td></tr>
+<tr><td>2026-05-13</td><td class="metric bad">53 / 280</td><td>18.9%</td></tr>
+<tr><td>2026-05-14</td><td class="metric bad">53 / 280</td><td>18.9%</td></tr>
+<tr><td>2026-05-15</td><td class="metric bad">16 / 280</td><td>5.7%</td></tr>
+</table>
+
+<h2>3. Coverage After Repair</h2>
+<table>
+<tr><th>Date</th><th>Constituents with Data</th><th>Coverage</th><th>Δ</th></tr>
+<tr><td>2026-05-11</td><td class="metric bad">56 / 280</td><td>20.0%</td><td class="warn">+3</td></tr>
+<tr><td>2026-05-12</td><td class="metric bad">56 / 280</td><td>20.0%</td><td class="warn">+3</td></tr>
+<tr><td>2026-05-13</td><td class="metric bad">56 / 280</td><td>20.0%</td><td class="warn">+3</td></tr>
+<tr><td>2026-05-14</td><td class="metric bad">56 / 280</td><td>20.0%</td><td class="warn">+3</td></tr>
+<tr><td>2026-05-15</td><td class="metric bad">19 / 280</td><td>6.8%</td><td class="warn">+3</td></tr>
+</table>
+
+<h2>4. Fetch Attempt Detail</h2>
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td>Symbols attempted</td><td class="metric">280</td></tr>
+<tr><td>Succeeded</td><td class="metric bad">3</td></tr>
+<tr><td>Failed (3 retries each)</td><td class="metric bad">277</td></tr>
+<tr><td>Rows fetched</td><td class="metric">15</td></tr>
+<tr><td>Failure type</td><td>RemoteDisconnected (TCP RST)</td></tr>
+<tr><td>Affected libraries</td><td>AKShare, requests, urllib</td></tr>
+</table>
+
+<h2>5. Confirmed OK</h2>
+<div class="status-ok">
+<ul>
+<li><strong>601689</strong>: 5/5 dates complete (05-11 → 05-15)</li>
+<li><strong>603392</strong>: 5/5 dates complete (05-11 → 05-15)</li>
+<li><strong>diagnose_paper_replay.py</strong>: Data source fixed — uses <code>ctx.daily_market_data</code> (matches production paper-mode)</li>
+<li><strong>paper_broker.py</strong>: exit_reason column no longer NaN (BUY=breakout_entry, SELL=removed from target — rotation, etc.)</li>
+<li><strong>Stale false positive</strong>: 300488/301028 no longer appear in replay BUY/positions/stale (they are non-constituent stocks)</li>
+<li><strong>Production paper-mode</strong>: 05-08→05-14 stale=0, ALL_STALE free, NAV=1,006,341</li>
+<li><strong>M1 — skipped days tracking</strong>: diagnose_paper_replay.py now counts skipped/total/processed days, warns INSUFFICIENT DATA if >10% skipped, distinguishes stale vs. skipped at output level</li>
+<li><strong>M2 — circuit breaker</strong>: akshare_client.py now stops after 10 consecutive failures (circuit_breaker=10), records skipped symbols separately, prevents prolonged IP ban extension</li>
+</ul>
+</div>
+
+<h2>6. M1/M2 Fixes (2026-05-15 Review)</h2>
+<div class="status-ok">
+<table>
+<tr><th>Fix</th><th>File</th><th>Change</th></tr>
+<tr><td>M1</td><td><code>scripts/diagnose_paper_replay.py</code></td><td>skipped_days counter + INSUFFICIENT DATA warning (>10%) + Reliability line + stale vs. skipped distinction</td></tr>
+<tr><td>M2</td><td><code>qts/data/akshare_client.py</code></td><td>consecutive failure circuit breaker (default 10), last_skipped_symbols tracking, prevents wasted requests during IP ban</td></tr>
+<tr><td>M3</td><td><code>scripts/diagnose_paper_replay.py</code></td><td>daily coverage ratio (actual/expected constituents), INSUFFICIENT COVERAGE warning (<80%), 3-tier Reliability (fully/partially/not reliable)</td></tr>
+</table>
+<p>Verified with --days 120 on partial data: 5 low-coverage days detected (05-11→05-15: 56/280=20%, 19/280=7%), Reliability=PARTIALLY RELIABLE, INSUFFICIENT COVERAGE warning active.</p>
+</div>
+
+<h2>7. 120d Replay with M3 Coverage Detection</h2>
+<div class="status-warn">
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td>Total days</td><td class="metric">120</td></tr>
+<tr><td>Processed</td><td class="metric">120</td></tr>
+<tr><td>Skipped (no market_data)</td><td class="metric good">0</td></tr>
+<tr><td>Low coverage (<80%)</td><td class="metric warn">5 days</td></tr>
+<tr><td>Min coverage</td><td class="metric bad">7% (05-15: 19/280)</td></tr>
+<tr><td>Avg coverage</td><td class="metric">96%</td></tr>
+<tr><td>Reliability Tier</td><td class="metric warn">PARTIALLY RELIABLE</td></tr>
+</table>
+<p><strong>Diagnosis:</strong> 115/120 days have full constituent coverage. 5 days (05-11→05-15) have only 20% coverage due to eastmoney IP ban blocking data repair. The 120d replay is NOT suitable for strategy evaluation because breadth computations and candidate pools on those 5 days are incomplete.</p>
+</div>
+
+<h2>8. Why Replay Cannot Run (Still Blocked)</h2>
+<div class="status-blocked">
+<p>Only <strong>56/280 (20%)</strong> HS300 constituents have 05-11→05-14 data. A 120d or 250d paper-mode replay
+with 80% of constituents missing would produce:</p>
+<ul>
+<li>Incomplete breadth computation (missing stocks skew regime scores)</li>
+<li>Missing breakout candidates (strategy can only choose from 56 visible stocks)</li>
+<li>Misleading NAV curves (positions priced with stale/incomplete data)</li>
+<li>Results not representative of Candidate B strategy behavior</li>
+</ul>
+</div>
+
+<h2>9. Next Steps</h2>
+<ol>
+<li>Wait several hours or switch to a different network for the eastmoney IP ban to expire</li>
+<li>Run: <pre>python scripts/incremental_update_data.py --start 2026-05-11 --end 2026-05-15</pre></li>
+<li>Re-check coverage: should approach 280/280</li>
+<li>Run 120d replay: <pre>python scripts/diagnose_paper_replay.py --days 120</pre></li>
+<li>Run 250d replay: <pre>python scripts/diagnose_paper_replay.py --days 250</pre></li>
+<li>Generate final HTML report with complete coverage results</li>
+</ol>
+
+<h2>10. Files Modified This Session</h2>
+<table>
+<tr><th>File</th><th>Change</th></tr>
+<tr><td><code>qts/data/akshare_client.py</code></td><td>+rate_limit 0.8s, +retries 2x, +failed_symbols, +circuit_breaker (10 consecutive), +last_skipped_symbols (M2)</td></tr>
+<tr><td><code>scripts/incremental_update_data.py</code></td><td>+--dry-run, +--symbols, +--extra-symbols, +--max-symbols guard, +constituents-based symbol resolution</td></tr>
+<tr><td><code>qts/backtest/paper_broker.py</code></td><td>+reason parameter on place_sell_order/place_buy_order, +rebalance reasons</td></tr>
+<tr><td><code>scripts/diagnose_paper_replay.py</code></td><td>New: multi-day replay + skipped_days (M1) + low_coverage detection (M3) + 3-tier Reliability + INSUFFICIENT COVERAGE warning</td></tr>
+</table>
+
+</body>
+</html>

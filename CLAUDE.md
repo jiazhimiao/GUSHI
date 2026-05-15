@@ -50,7 +50,7 @@ A 股数据
 当前项目已经进入：
 
 ```text
-MVP 1：本地回测系统阶段（Candidate B 升级为 new_candidate_baseline）
+MVP 1：本地回测系统 → Paper Trading 过渡阶段
 ```
 
 ### 当前基线: Candidate B (new_candidate_baseline)

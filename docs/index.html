@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QTS — A股量化交易系统 Dashboard</title>
+<style>
+body { font-family: 'Segoe UI', system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 20px; background: #f5f5f5; color: #333; }
+h1 { border-bottom: 3px solid #2c3e50; padding-bottom: 10px; }
+h2 { margin-top: 30px; color: #2c3e50; }
+.status-ok { background: #eafaf1; border-left: 4px solid #27ae60; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+.status-warn { background: #fef9e7; border-left: 4px solid #f39c12; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+.status-blocked { background: #fdecea; border-left: 4px solid #e74c3c; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+th { background: #2c3e50; color: white; }
+tr:nth-child(even) { background: #fafafa; }
+.metric { font-family: 'Consolas', monospace; font-weight: bold; }
+.good { color: #27ae60; }
+.warn { color: #e67e22; }
+.bad { color: #e74c3c; }
+a { color: #2980b9; }
+</style>
+</head>
+<body>
+
+<h1>QTS — A股量化交易系统</h1>
+<p><strong>Updated:</strong> 2026-05-15 | <strong>Phase:</strong> MVP 1 → Paper Trading</p>
+
+<h2>Current Baseline</h2>
+<div class="status-ok">
+<p><strong>Candidate B</strong> (score_high=0.80, atr_bear=0.89, breakout_bear=40)</p>
+<table>
+<tr><td>Total Return</td><td class="metric good">84.10%</td></tr>
+<tr><td>Max Drawdown</td><td class="metric">-8.56%</td></tr>
+<tr><td>GA Fitness</td><td class="metric">2.304</td></tr>
+<tr><td>Total Trades</td><td class="metric">1137</td></tr>
+</table>
+</div>
+
+<h2>Paper-Mode Status</h2>
+
+<h3>Data Pipeline</h3>
+<div class="status-ok">
+<strong>Incremental update scripts:</strong> rate-limit + retry + failed_symbols tracking. Constituents-based symbol resolution (no more 2619-request bursts). --dry-run and --max-symbols guards active.
+</div>
+
+<h3>Paper Broker</h3>
+<div class="status-ok">
+<strong>exit_reason:</strong> All fills have descriptive reasons (breakout_entry, removed from target — rotation, atr_stop, profit_lock). No more NaN.
+</div>
+
+<h3>Replay Diagnosis</h3>
+<div class="status-ok">
+<strong>Data source:</strong> Fixed — <code>ctx.daily_market_data</code> (filtered, matches production paper-mode). No more false positive stale from non-constituent stocks (300488/301028).<br>
+<strong>M1 — skipped days:</strong> Tracks skipped/processed/total days. If >10% skipped, warns INSUFFICIENT DATA. Distinguishes stale (position-level) from skipped (date-level).<br>
+<strong>M2 — circuit breaker:</strong> Fetches stop after 10 consecutive failures. Prevents prolonged IP bans from wasted retries. Skipped symbols recorded separately.<br>
+<strong>M3 — coverage detection:</strong> Daily actual/expected constituent ratio. INSUFFICIENT COVERAGE warning (<80%). 3-tier Reliability: fully/partially/not reliable.
+</div>
+
+<h3>HS300 Constituent Coverage (05-11 → 05-15)</h3>
+<div class="status-blocked">
+<strong>BLOCKED:</strong> Only 56/280 (20%) constituents have 05-11→05-14 data. 277/280 fetch attempts failed (eastmoney IP ban from earlier rapid-fire requests). 05-15 coverage is 19/280 (6.8%). Full 120d/250d replay pending data recovery.
+<br><a href="../reports/paper_data_repair_blocked_2026-05-15.html">Full blocked-status report →</a>
+</div>
+
+<h3>Verified Paper-Mode Run (05-08 → 05-14)</h3>
+<div class="status-ok">
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td>Latest Verified NAV</td><td class="metric">1,006,341</td></tr>
+<tr><td>Stale Days</td><td class="metric good">0</td></tr>
+<tr><td>ALL_STALE Records</td><td class="metric good">None</td></tr>
+<tr><td>Price Status</td><td class="metric good">All OK</td></tr>
+<tr><td>Data Source</td><td>ctx.daily_market_data (filtered)</td></tr>
+</table>
+</div>
+
+<h2>Key Module Status</h2>
+<table>
+<tr><th>Module</th><th>Status</th><th>Note</th></tr>
+<tr><td>Data Pipeline</td><td class="good">OK</td><td>Rate-limited, won't trigger IP ban again</td></tr>
+<tr><td>Paper Broker</td><td class="good">OK</td><td>exit_reason filled, fills align with BacktestEngine</td></tr>
+<tr><td>Replay Diagnosis</td><td class="good">OK</td><td>Data source fixed, false-stale eliminated</td></tr>
+<tr><td>HS300 05-11→05-15 Data</td><td class="bad">BLOCKED</td><td>20% coverage — cannot run production replay</td></tr>
+<tr><td>601689/603392 Data</td><td class="good">Complete</td><td>5/5 dates, paper-mode NAV verified</td></tr>
+</table>
+
+<h2>Session Changes (2026-05-15)</h2>
+<table>
+<tr><th>File</th><th>Change</th></tr>
+<tr><td><code>qts/data/akshare_client.py</code></td><td>rate_limit 0.8s, retries 2, failed_symbols, circuit_breaker (10 consecutive)</td></tr>
+<tr><td><code>scripts/incremental_update_data.py</code></td><td>--dry-run, --symbols/--extra-symbols, --max-symbols</td></tr>
+<tr><td><code>qts/backtest/paper_broker.py</code></td><td>place_sell_order/place_buy_order reason param</td></tr>
+<tr><td><code>scripts/diagnose_paper_replay.py</code></td><td>New: multi-day replay + skipped_days (M1) + low_coverage (M3) + 3-tier Reliability</td></tr>
+</table>
+
+<h2>Next Steps</h2>
+<ol>
+<li>Wait for eastmoney IP ban to expire (hours+)</li>
+<li>Complete HS300 constituent data fill for 05-11→05-15</li>
+<li>Run 120d and 250d paper-mode replay diagnostics</li>
+<li>Generate final complete-coverage HTML report</li>
+</ol>
+
+</body>
+</html>
