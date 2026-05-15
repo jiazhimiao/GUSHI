@@ -15,6 +15,14 @@ DeepSeek / DS coding agent
 
 ---
 
+## 0. 代码质量守门 (Code Quality Gate)
+
+When modifying Python code, diagnostic scripts, data update scripts, paper-mode,
+backtest, broker, replay tools, or any code that affects experiment results,
+use the project skill `quant-code-quality-gate`.
+
+---
+
 ## 1. 项目性质
 
 本项目是一个 Python A 股量化交易系统，涉及：
