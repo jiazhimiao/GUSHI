@@ -78,10 +78,32 @@ total_return ≈ 83.07%     max_drawdown ≈ -8.06%     Calmar ≈ 0.97
 total_trades = 1231        score_high = 0.72         atr_bear = 1.19
 ```
 
+### Entry Quality Diagnosis (2026-05-17)
+
+```
+Signal scarcity:    median 1 breakout/day, P25=0
+Ranking noise:      94.2% days: N vs N+1 score gap ≈ 0 (meaningless)
+Daily rotation:     78% of top_n changes every day
+Next-day dropout:   80.7% of new entries gone next day
+False breakouts:    48.4% fall below breakout level within 5d
+Avg stay in top_n:  0.2 days
+```
+
+Root cause: `breakout_pct × log(1+vol_boost)` formula produces compressed scores.
+When only ~4 stocks pass filter, top_n=15 fills with everything including near-zero scores.
+Tiny score changes trigger complete reshuffling.
+
+Report: `reports/diagnose_entry_quality_20260517_000643.txt`
+Script: `scripts/diagnose_entry_quality.py`
+
 ### 重要边界
 
+- **入口信号质量是当前最大瓶颈** — 必须先修信号稳定性，再考虑任何其他优化
 - pullback_entry / rank_buffer 默认关闭（research-only）
 - F/D1/D2/D3 实验均未进入主策略
+- exit-loosen（ATR、support/MA relax、trailing stop）已证明是死路
+- hold_winner 降低 rotation 45% 但未达目标
+- Candidate C_safe 最高 ann=4.81% 但 cost×3 崩溃
 - 不要重建 historical_constituents.json
 - 不要改撮合、风控、手续费、滑点、T+1、涨跌停
 - 不要正式大 GA
