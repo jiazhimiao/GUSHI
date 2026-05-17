@@ -1,0 +1,110 @@
+======================================================================
+入场信号质量实验汇总 — 2026-05-17
+Baseline: Candidate B (fitness=1.943, ann=7.92%, dd=-8.56%, trades=1138)
+======================================================================
+
+## 实验结果矩阵
+
+| 实验 | ann% | dd% | fitness | trades | overlap% | rot% | avg_hold | cost×3 ann% | turnover |
+|------|------|------|---------|--------|----------|------|----------|-------------|----------|
+| Baseline | 7.92 | -8.56 | 1.943 | 1138 | 20.7 | 79.3 | 29.3 | 0.06 | 8.15 |
+| A: dynamic_topn | 7.92 | -8.56 | 1.943 | 1138 | 20.7 | 79.3 | 29.3 | 0.06 | 8.15 |
+| B: pct_min=0.5 | 7.66 | -8.57 | 1.892 | 1131 | 20.9 | 79.1 | 30.6 | -0.13 | 8.11 |
+| B: pct_min=0.75 | 7.69 | -8.26 | 1.976 | 1113 | 21.7 | 78.3 | 34.4 | -0.03 | 8.02 |
+| B: pct_min=1.0 | 7.61 | -8.42 | 1.701 | 1085 | 21.0 | 79.0 | 35.2 | 0.05 | 7.90 |
+| D: rank=1.5 | 2.65 | -15.79 | 0.772 | 888 | 40.6 | 59.4 | 31.3 | 0.62 | 2.15 |
+| D: rank=2.0 | 2.96 | -11.45 | 0.973 | 1221 | 40.3 | 59.7 | 50.6 | 0.29 | 2.33 |
+| D: rank=3.0 | 2.97 | -10.46 | 0.535 | 1597 | 40.5 | 59.5 | 52.3 | 0.70 | 2.45 |
+| C: confirm=1d | 1.25 | -22.71 | -2.075 | 1086 | 17.5 | 82.5 | 57.1 | -6.57 | 7.04 |
+| C: confirm=2d | -1.03 | -24.53 | -0.913 | 1030 | 17.8 | 82.2 | 44.0 | -8.40 | 6.75 |
+
+## 停止条件检查
+
+| 实验 | overlap>=40% | fb<=35% | cost×3>-5% | 全部通过? |
+|------|-------------|---------|------------|----------|
+| A: dynamic_topn | FAIL (20.7) | N/A | PASS | NO |
+| B: all pct_min | FAIL (~21) | N/A | PASS | NO |
+| D: all rank | PASS (~40.5) | N/A | PASS | NO (fb N/A) |
+| C: all confirm | FAIL (~17.7) | N/A | C2 FAIL | NO |
+
+注: false_breakout_rate 标记为 N/A，因为 signal_log 记录的是策略实际选股（非 raw candidates），
+无法在 signal_log 中直接计算假突破率。假突破率需要在原始 candidate 层面计算。
+
+## 关键发现
+
+### 1. dynamic_top_n (A) — 无效
+RegimeEngine 已将持仓控制在 1-2 只，dynamic_top_n 的逻辑（cap at n_holds + n_signals）
+在本策略中不产生任何边际效果。
+
+### 2. breakout_pct_min (B) — 边际改善，不足以达到目标
+- 0.5%→1.0% 阈值使 trades 从 1138 降至 1085 (-4.7%)
+- overlap 仅从 20.7% 提至 21.0% (+0.3pp)
+- rotation 几乎未变 (~79%)
+- 指标改善幅度远不足达到 40% overlap 目标
+
+### 3. rank_buffer (D) — 唯一通过 overlap≥40% 的机制
+- 三个 multiplier 均达到 overlap 40.3-40.6%
+- rotation 降至 ~59.5%
+- 但 ann 从 7.92% 暴跌至 2.65-2.97% (-62-67%)
+- max_dd 从 -8.56% 恶化至 -10.46% ~ -15.79%
+- turnover 从 8.15 降至 ~2.3（正面）
+- cost×3 仍为正（0.29-0.70%）
+- 结论：rank_buffer 以牺牲收益为代价换取稳定性
+
+### 4. confirmation delay (C) — 灾难性
+- delay=1: ann 从 7.92% 降至 1.25% (-84%)
+- delay=2: ann 转负 -1.03%
+- dd 扩大至 -22~-25%
+- rotation 反而略有增加 (82.5%)
+- 延迟入场在 RegimeEngine 主导的环境下反而错过有限的机会窗口
+
+## 核心结论
+
+**当前 trend_breakout v2 的入场 alpha 结构不足以同时实现高收益和低轮换。**
+
+原因：
+1. RegimeEngine 将每日有效持仓控制在 1-2 只（med=0, P75=1），
+   任何入场过滤器都作用在一个已经被极度压缩的选股空间上
+2. 策略依赖少数高集中度仓位（2024年贡献 56% 收益），
+   保护这些仓位（rank_buffer）虽然降低了 rotation，但也锁定了弱仓位
+3. breakout_pct_min 和 confirmation delay 都是"减信号"策略，
+   在一个已经信号稀缺（med=0）的环境中效果有限
+4. 48.4% 假突破率（来自原始诊断 report）的根本问题在于
+   breakout_pct×log(1+vol_boost) 公式的区分度不足，而非仓位过多
+
+### 是否建议继续在当前结构上做 GA？
+
+**不建议。** 单因子实验已穷举 4 类入场过滤器，无一能同时达成：
+- rotation < 40%（仅 rank_buffer 达成但牺牲收益）
+- false_breakout <= 35%（无法在 RegimeEngine 层面解决）
+
+建议方向：
+1. 重新设计 breakout 评分公式，提高真/假突破区分度（而非过滤）
+2. 在市场广度较高时增加仓位分散度（当前 β 过度集中在 1-2 只）
+3. 考虑突破确认机制在 RegimeEngine 层面的整合（而非简单延迟）
+4. 验证 baseline 收益来源（2024年集中度风险）是否需要分散化
+
+## 代码变更摘要
+
+修改的文件:
+- qts/strategies/trend_breakout.py: +breakout_pct_min, +confirmation_days,
+  +dynamic_top_n, sell_rank_multiplier int→float, +_signal_log, +reset(),
+  +_log_signal(), +_process_confirmations(), int(sell_top_n) fix
+- scripts/run_entry_experiment.py: 新建，统一实验 runner
+- scripts/diagnose_entry_quality.py: +新参数 CLI
+
+新增 reports:
+- reports/entry_exp_baseline_v4_*.txt
+- reports/entry_exp_A_dynamic_topn_*.txt
+- reports/entry_exp_B_pct_min_0.5_*.txt
+- reports/entry_exp_B_pct_min_0.75_*.txt
+- reports/entry_exp_B_pct_min_1.0_*.txt
+- reports/entry_exp_D_rank_1.5_*.txt
+- reports/entry_exp_D_rank_2.0_*.txt
+- reports/entry_exp_D_rank_3.0_*.txt
+- reports/entry_exp_C_confirm_1_*.txt
+- reports/entry_exp_C_confirm_2_*.txt
+- reports/entry_quality_experiment_summary_20260517.txt (本文件)
+
+未修改: broker, engine, data pipeline, GA optimizer
+未提交: git

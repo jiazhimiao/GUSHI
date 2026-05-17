@@ -1,0 +1,278 @@
+======================================================================
+Breakout Scoring Redesign — 离线研究计划 v2 (修订版)
+日期: 2026-05-17
+修订: candidate通过条件、daily-ranking、score_v3、OHLC、时间切分、通过条件
+======================================================================
+
+## 背景 (不变)
+
+当前 breakout 评分公式:
+  score = breakout_pct * log(1 + volume_boost)
+
+问题:
+- Raw FB rate = 48.5%
+- 47.7% 交易日零信号 (median=1, P25=0)
+- 真/假突破幅度差异仅 1.55pp (3.53% vs 1.98%)
+
+目标:
+- Daily top 20% (或 top 3) 的 FB rate ≤ 35%
+- Forward return 随 score 单调改善
+- 不显著增加 zero-candidate days
+
+======================================================================
+
+## 1. 数据层级 (不变)
+
+只使用 L2 raw_breakout_candidates (突破 N 日高点 + 放量 + 站上 MA)。
+不使用 RegimeEngine 后持仓。
+
+数据来源:
+- ctx.prices (close), ctx.highs, ctx.volumes, ctx.opens, ctx.lows
+  → 全部 5 个 OHLC 字段在 build_strategy_context 中可用 ✓ (已确认)
+- HS300 成分股过滤 (constituent quarterly)
+- 2018-01-01 ~ 2026-05-15 全区间
+
+======================================================================
+
+## 2. 标签定义 (不变)
+
+### 2.1 false_breakout
+  - TRUE: 候选后 5 个交易日内，任一日收盘价 < 突破位 B
+  - FALSE: 候选后 5 日内，所有收盘价 >= B
+
+### 2.2 forward_return_5d / 10d
+  - fwd_ret_5d  = (close_T+5 / close_T - 1) * 100
+  - fwd_ret_10d = (close_T+10 / close_T - 1) * 100
+
+### 2.3 max_adverse_excursion_5d (MAE_5d)
+  - min(0, (lowest_close_T+1..T+5 / close_T - 1) * 100)
+
+======================================================================
+
+## 3. 候选评分公式
+
+### 3.1 baseline_score
+  score_0 = breakout_pct * log(1 + volume_boost)
+
+### 3.2 score_v1: 非线性 breakout_pct 权重
+  假设: 小幅突破 (<0.5%) 几乎全是假突破，应惩罚
+
+  f(x) 候选:
+    f1(x) = x^2 / 2           (平方: 0.5%→0.125, 3%→4.5)
+    f2(x) = max(0, x - 0.3)   (线性偏移)
+    f3(x) = x * (1 + x/5)     (温和非线性)
+
+  score_1 = f(breakout_pct) * log(1 + volume_boost)
+
+### 3.3 score_v2: K 线结构 (OHLC 数据已确认可用)
+  假设: 真突破实体占比高、收盘在高位、上影线短
+
+  body_pct      = |close_T - open_T| / (high_T - low_T + epsilon)
+  close_loc     = (close_T - low_T) / (high_T - low_T + epsilon)
+  upper_shadow  = (high_T - max(open_T, close_T)) / (high_T - low_T + epsilon)
+
+  score_2 = score_0 * (1 + body_pct * w1) * (1 + close_loc * w2) * (1 - upper_shadow * w3)
+  默认权重: w1=1.0, w2=0.5, w3=1.0 (可扫参)
+
+### 3.4 score_v3: 突破前价格行为 (仅使用 T 日及以前数据)
+  修订: 原 persistence_N 使用未来数据，不可上线。改为:
+
+  3.4.1 pre_approach: 突破前 3 日收盘价接近前高的程度
+    approach_3d = mean(close_T-2, close_T-1) / n_day_high_before_T
+    (值越高=越接近突破，可能意味着蓄力而非偶然)
+
+  3.4.2 pre_volatility_contraction: 突破前 5 日波动率 vs 前 20 日波动率
+    vol_5d / vol_20d
+    (值 < 1 = 突破前波动收敛，常见于真突破前)
+
+  3.4.3 pre_above_ma_days: 突破前 5 日站上 MA 的天数 (0-5)
+    (连续站上 MA = 趋势健康)
+
+  3.4.4 pre_drawdown: 突破前 10 日最大回撤幅度
+    max_dd_10d_before = (close_T-10..T-1 最低 / close_T-10..T-1 最高 - 1)
+    (回撤小 = 趋势未受损)
+
+  3.4.5 pre_vol_ramp: 突破前 3 日成交量 vs 前 20 日
+    vol_3d_avg / vol_20d_avg
+    (温和放大 > 1.0 = 蓄力，< 1.0 = 无资金关注)
+
+  score_3 = score_0
+          * (1 + max(0, approach_3d - 0.95) * 2.0)     # 接近前高加分
+          * (1 + max(0, 1 - vol_5d/vol_20d) * 0.5)     # 波动收敛加分
+          * (1 + pre_above_ma_days / 10)                # 趋势确认加分
+          * (1 + max(0, pre_drawdown + 0.05) * 2.0)    # 回撤小加分
+          * clamp(pre_vol_ramp, 0.8, 1.5)               # 量能适中
+
+  (原 persistence_N 保留为诊断变量，仅用于离线评估，不作为可上线 score)
+
+### 3.5 score_v4: 市场广度确认
+  假设: 市场广度好时突破成功率更高
+
+  breadth = 站上 MA30 的成分股占比 (0-1)
+
+  score_4 = score_0 * (1 + breadth * 0.5)
+
+======================================================================
+
+## 4. 离线评估指标
+
+### 4.1 Global Decile Metrics (全历史候选统一排名)
+
+对所有候选按 score 降序排列，分 10 个 decile:
+
+| 指标 | 说明 |
+|------|------|
+| candidate_count | 该 decile 候选总数 |
+| fb_rate | false_breakout 占比 |
+| fwd_ret_5d_mean / median | |
+| fwd_ret_10d_mean / median | |
+| mae_5d_mean | |
+| yearly_candidate_count | 每年该 decile 的候选数 |
+
+### 4.2 Daily Ranking Metrics (每日当天候选内排名)
+
+**因为真实策略是每天从当天候选里选，不是从全历史候选里选。**
+
+对每个交易日:
+  - 将该日所有候选按 score 降序排列
+  - 取 top 1 / top 3 / top 20% (至少 1 只) 作为一个 bucket
+
+| 指标 | 说明 |
+|------|------|
+| daily_top1_FB_rate | 每天 top1 候选的假突破率 (跨所有交易日) |
+| daily_top3_FB_rate | 同上，top 3 |
+| daily_top20pct_FB_rate | 同上，top 20% (min 1) |
+| daily_top1_fwd_ret_5d_median | |
+| daily_top3_fwd_ret_5d_median | |
+| daily_top20pct_fwd_ret_5d_median | |
+| daily_top20pct_MAE_5d | |
+| daily_zero_candidate_days_pct | 当天没有任何候选的天数占比 |
+| daily_selected_median | 有候选的交易日中 top bucket 候选数的中位数 |
+
+### 4.3 高级指标 (可选)
+  - AUC: score 预测 false_breakout 的 ROC AUC (global)
+  - KS: score 对 true/false breakout 的区分度 (global)
+  - decile_monotonicity: fb_rate / fwd_ret 是否随 decile 单调
+
+======================================================================
+
+## 5. 时间切分与逐年稳定性
+
+**离线评分也可能过拟合。** 必须做时间切分:
+
+| Split | Period | Purpose |
+|-------|--------|---------|
+| Train | 2018-2021 | 探索性分析，参数调优 |
+| Validation | 2022-2023 | 选定 best variant |
+| Test | 2024-2026 | 最终评估 |
+
+输出要求:
+- Year-by-year decile FB rate 表
+- Year-by-year daily_top3_FB_rate
+- Year-by-year daily_top20pct_FB_rate
+- Year-by-year fwd_ret_5d/10d
+- Year-by-year candidate count
+
+任何 score variant 不能仅靠 2024 年表现通过。
+
+======================================================================
+
+## 6. Candidate 数量通过条件 (修订)
+
+基于 taxonomy audit 实测:
+  baseline raw_breakout_candidates: median=1, P25=0, mean≈4.0
+  zero_candidate_days = 47.7%
+
+修订后的通过条件:
+
+| 条件 | 阈值 | 说明 |
+|------|------|------|
+| zero_candidate_days_pct | ≤ baseline + 10pp (即 ≤ 57.7%) | 不能显著恶化 |
+| 有信号日 daily selected median | ≥ 1 | 有候选时至少能选 1 只 |
+| 每年 top bucket 样本数 | ≥ 200 (per year) | 不足则标注 |
+
+不再要求全交易日 median ≥ 3 (与实测数据不符)。
+
+======================================================================
+
+## 7. 通过条件 (修订)
+
+一个 score variant 被认为 "通过"，需满足:
+
+### 7.1 核心通过条件 (必须全部满足)
+
+A. **FB 率改善** (daily ranking):
+   daily_top3_FB_rate ≤ 35%
+   OR daily_top3_FB_rate 比 baseline 降低 ≥ 8pp
+   OR daily_top20pct_FB_rate 比 baseline 降低 ≥ 10pp
+
+B. **Forward return 不退化**:
+   daily_top3_fwd_ret_5d_median ≥ baseline 同指标
+   且 daily_top3_fwd_ret_10d_median ≥ baseline 同指标
+
+C. **MAE 不劣化**:
+   daily_top20pct_MAE_5d 不比 baseline 更负 (绝对值不更大)
+
+D. **年度一致性**:
+   至少 3 个自然年度 (在 train+val 中) daily_top3_FB_rate 方向一致改善
+   不能仅靠单一年份 (如 2024) 通过
+
+E. **样本量充足**:
+   每年 top bucket ≥ 200 候选 (不足时标注)
+   zero_candidate_days ≤ baseline + 10pp
+
+F. **Daily selection 可行**:
+   有信号交易日中 daily selected median ≥ 1
+
+### 7.2 加分项 (不强制)
+
+- Global decile fb_rate 单调递减
+- AUC > 0.60
+- KS > 0.15
+
+### 7.3 失败处理
+
+如果 v1-v4 全部不通过:
+→ 输出结论: "breakout_pct × log(1+vol_boost) 结构内优化空间不足"
+→ 建议: 考虑引入非纯突破信号源，或改变策略结构
+→ 停止该策略结构，不跑回测
+
+======================================================================
+
+## 8. 实现建议 (修订)
+
+### 8.1 实现顺序
+  Step 1: 离线计算 baseline_score 的全指标 (global + daily ranking)
+  Step 2: 时间切分 → 确认 baseline 在 train/val/test 上的稳定性
+  Step 3: 实现 score_v1 (工作量最小，预期改善最大)
+  Step 4: v1 评估通过 → 实现在线版本；不通过 → 测 v2
+  Step 5: v2 需要 OHLC (已确认可用)
+  Step 6: v3 最复杂 (5 个子因子)，在 v1/v2 之后
+  Step 7: v4 最简单，作为最后备选
+
+### 8.2 离线脚本
+  新建 scripts/evaluate_scoring_redesign.py:
+  - 加载 ctx.prices/highs/volumes/opens/lows (build_strategy_context)
+  - 检测 L2 raw candidates
+  - 计算 labels (fb, fwd_ret_5d/10d, MAE_5d)
+  - 计算各 score variant
+  - 输出 global decile 表 + daily ranking 表
+  - 输出 time-split + year-by-year
+  - 保存到 reports/scoring_redesign_eval_YYYYMMDD_HHMMSS.txt
+
+### 8.3 不跑回测
+  离线评估完全在 raw candidate 层进行。通过后才考虑嵌入策略回测。
+
+======================================================================
+
+## 9. 修订记录
+
+v1 → v2 修订:
+1. Candidate 通过条件: median ≥ 3 → zero_days ≤ baseline+10pp + daily selected ≥ 1
+2. 新增 daily ranking metrics (top1/top3/top20% per-day)
+3. score_v3 改为仅使用 T 日及以前可见信息 (5 个 pre-breakout 子因子)
+4. 确认 OHLC 全部可用 (opens, highs, lows, prices) → score_v2 可行
+5. 新增时间切分 train/val/test + year-by-year 稳定性
+6. 通过条件改为 6 项必须满足 (FB/fwd_ret/MAE/年度一致性/样本量/daily可行性)
+
+======================================================================

@@ -44,9 +44,14 @@ class TrendBreakoutStrategy(Strategy):
         atr_multiple: float = 2.0,          # ATR倍数（2x ATR自适应止损）
         atr_period: int = 14,               # ATR计算周期
         profit_lock_pct: float = 0.15,      # 盈利超此比例后止损上移到成本价
+        atr_exit_mult: float = 2.0,         # research: ATR trailing stop multiplier (replaces hardcoded 2.0)
+        enable_profit_relax: bool = False,   # research: when profitable, skip support/MA exits
         top_n: int = 15,
         max_weight_per_stock: float = 0.10,
         cash_buffer: float = 0.02,
+        breakout_pct_min: float = 0.0,       # entry quality: min breakout magnitude (%)
+        confirmation_days: int = 0,           # entry quality: delay entry N days, require price > breakout level
+        dynamic_top_n: bool = False,          # entry quality: scale top_n to actual signal count
         filters: dict | None = None,
         portfolio_config: dict | None = None,
     ):
@@ -61,9 +66,14 @@ class TrendBreakoutStrategy(Strategy):
         self.atr_multiple = atr_multiple
         self.atr_period = atr_period
         self.profit_lock_pct = profit_lock_pct
+        self.atr_exit_mult = atr_exit_mult
+        self.enable_profit_relax = enable_profit_relax
         self.top_n = top_n
         self.max_weight_per_stock = max_weight_per_stock
         self.cash_buffer = cash_buffer
+        self.breakout_pct_min = breakout_pct_min
+        self.confirmation_days = confirmation_days
+        self.dynamic_top_n = dynamic_top_n
         self.filters = filters or {
             "exclude_st": True,
             "exclude_suspended": True,
@@ -87,7 +97,30 @@ class TrendBreakoutStrategy(Strategy):
         self.enable_pullback_entry: bool = False
         self.pullback_max_alloc_pct: float = 0.4
         self.enable_rank_buffer: bool = False
-        self.sell_rank_multiplier: int = 2
+        self.sell_rank_multiplier: float = 2.0
+        # Entry quality: pending confirmation buffer (cleared per instance)
+        self._pending_confirmations: dict[str, dict] = {}
+        # Signal log for diagnosis (record what was actually selected each day)
+        self._signal_log: list[dict] = []
+
+    def reset(self):
+        """Clear per-run state. Call before each backtest/experiment."""
+        self._entry_prices.clear()
+        self._strategy_peak = 0.0
+        self._strategy_dd = 0.0
+        self._cooling_days = 0
+        self._pending_confirmations.clear()
+        self._signal_log.clear()
+        if hasattr(self, '_pb_funnel'):
+            self._pb_funnel.clear()
+
+    def _log_signal(self, date: str, symbols: list[str], scores: dict[str, float]):
+        self._signal_log.append({
+            "date": date,
+            "symbols": symbols,
+            "scores": scores,
+            "n_selected": len(symbols),
+        })
 
     def generate_signals(
         self,
@@ -113,6 +146,7 @@ class TrendBreakoutStrategy(Strategy):
             is_bull, dow_reason = dow.is_bull_market(current_date, market_data)
             if not is_bull:
                 logger.info(f"[{current_date}] 道氏理论: 非牛市({dow_reason})，空仓")
+                self._log_signal(current_date, [], {})
                 return pd.DataFrame()
 
         # ── 1. Market Regime: adaptive or three-tier ──
@@ -148,6 +182,7 @@ class TrendBreakoutStrategy(Strategy):
                 )
             if regime_score <= 0.01:
                 logger.info(f"[{current_date}] 评分{regime_score:.2f}≈0 空仓")
+                self._log_signal(current_date, [], {})
                 return pd.DataFrame()
 
             adapted = self.regime_engine.map_params(regime_score)
@@ -164,6 +199,7 @@ class TrendBreakoutStrategy(Strategy):
             # Three-tier mode (original)
             if breadth < self.breadth_half:
                 logger.info(f"[{current_date}] 广度{breadth:.0%}<{self.breadth_half:.0%} 空仓")
+                self._log_signal(current_date, [], {})
                 return pd.DataFrame()
             elif breadth < self.min_breadth:
                 regime = "half"
@@ -182,6 +218,7 @@ class TrendBreakoutStrategy(Strategy):
                 f"[{current_date}] 熔断冷却中(剩余{self._cooling_days}天) "
                 f"DD={self._strategy_dd:.0%}"
             )
+            self._log_signal(current_date, [], {})
             return pd.DataFrame()  # force cash
 
         # ── 2. Collect symbols to keep + new entries ──
@@ -189,7 +226,7 @@ class TrendBreakoutStrategy(Strategy):
 
         if self.enable_rank_buffer:
             # ── Rank buffer mode ──
-            sell_top_n = self.top_n * self.sell_rank_multiplier
+            sell_top_n = int(self.top_n * self.sell_rank_multiplier)
 
             # Entry scores (original breakout, for new buys only)
             entry_scores = self._evaluate_breakout_batch(current_date, filters_ok)
@@ -227,6 +264,7 @@ class TrendBreakoutStrategy(Strategy):
             target_syms = target_syms[:sell_top_n]
 
             if not target_syms:
+                self._log_signal(current_date, [], {})
                 return pd.DataFrame()
 
             n = len(target_syms)
@@ -239,7 +277,7 @@ class TrendBreakoutStrategy(Strategy):
                 f"alloc={alloc_pct:.0%} w={weight:.2%}"
             )
 
-            return pd.DataFrame({
+            result = pd.DataFrame({
                 "symbol":        [t[0] for t in target_syms],
                 "target_weight": [weight] * n,
                 "score":         [t[2] for t in target_syms],
@@ -247,6 +285,9 @@ class TrendBreakoutStrategy(Strategy):
                                   for t in target_syms],
                 "target_reason": [t[1] for t in target_syms],
             })
+            self._log_signal(current_date, [t[0] for t in target_syms],
+                           {t[0]: t[2] for t in target_syms})
+            return result
 
         else:
             # ── Original logic with entry type tagging ──
@@ -267,11 +308,26 @@ class TrendBreakoutStrategy(Strategy):
 
             # 2b. Find new breakout entries
             if regime == "full" or len(target_scores) < 5:
-                new_entries = self._evaluate_breakout_batch(current_date, filters_ok)
-                for sym, score in new_entries.items():
-                    if sym not in target_scores:
-                        target_scores[sym] = score
-                        target_reasons[sym] = "breakout_entry"
+                if self.confirmation_days > 0:
+                    today_candidates = self._evaluate_breakout_batch(current_date, filters_ok)
+                    for sym, score in today_candidates.items():
+                        if sym not in self._pending_confirmations:
+                            self._pending_confirmations[sym] = {
+                                "score": score,
+                                "breakout_date": current_date,
+                                "breakout_level": self._last_breakout_levels.get(sym, 0.0),
+                            }
+                    confirmed = self._process_confirmations(current_date, filters_ok)
+                    for sym, score in confirmed.items():
+                        if sym not in target_scores:
+                            target_scores[sym] = score
+                            target_reasons[sym] = "breakout_entry_confirmed"
+                else:
+                    new_entries = self._evaluate_breakout_batch(current_date, filters_ok)
+                    for sym, score in new_entries.items():
+                        if sym not in target_scores:
+                            target_scores[sym] = score
+                            target_reasons[sym] = "breakout_entry"
 
             # 2c. Pullback entries (with alloc_pct gate)
             pb_candidates = 0
@@ -319,17 +375,24 @@ class TrendBreakoutStrategy(Strategy):
                     if kept:
                         n = len(kept)
                         w = (1.0 - self.cash_buffer) * alloc_pct / n if n > 0 else 0
+                        self._log_signal(current_date, kept, {k: 0.5 for k in kept})
                         return pd.DataFrame({
                             "symbol": kept,
                             "target_weight": [w] * n,
                             "score": [0.5] * n,
                             "reason": ["hold"] * n,
                         })
+                self._log_signal(current_date, [], {})
                 return pd.DataFrame()
 
             # ── 3. Select top N ──
             scored = sorted(target_scores.items(), key=lambda x: (-x[1], x[0]))
-            effective_n = max(5, int(self.top_n * alloc_pct)) if regime == "half" else self.top_n
+            if self.dynamic_top_n:
+                n_new_signals = sum(1 for v in target_reasons.values() if v in ("breakout_entry", "breakout_entry_confirmed"))
+                n_holds = sum(1 for v in target_reasons.values() if v == "hold")
+                effective_n = min(self.top_n, n_holds + n_new_signals)
+            else:
+                effective_n = max(5, int(self.top_n * alloc_pct)) if regime == "half" else self.top_n
             selected = scored[:effective_n]
             n = len(selected)
             weight = (1.0 - self.cash_buffer) * alloc_pct / n if n > 0 else 0
@@ -357,12 +420,14 @@ class TrendBreakoutStrategy(Strategy):
                     f"{reasons.count('pullback_entry')} pb, {reasons.count('hold')} hold）"
                 )
 
-            return pd.DataFrame({
+            result = pd.DataFrame({
                 "symbol": names,
                 "target_weight": [weight] * n,
                 "score": [s[1] for s in selected],
                 "reason": reasons,
             })
+            self._log_signal(current_date, names, {s[0]: s[1] for s in selected})
+            return result
 
     def _apply_filters(
         self, latest: pd.DataFrame, market_data: pd.DataFrame, date: str
@@ -529,7 +594,76 @@ class TrendBreakoutStrategy(Strategy):
         volume_boost = today_vol[signal_mask] / avg_vol[signal_mask].replace(0, np.nan)
         scores = breakout_pct * np.log1p(volume_boost)
 
-        return {sym: float(scores[sym]) for sym in signal_mask[signal_mask].index if scores[sym] > 0}
+        # Entry quality: filter by min breakout magnitude
+        if self.breakout_pct_min > 0:
+            scores[breakout_pct < self.breakout_pct_min] = 0.0
+
+        # Store breakout levels for confirmation delay
+        self._last_breakout_levels: dict[str, float] = {}
+        result: dict[str, float] = {}
+        for sym in signal_mask[signal_mask].index:
+            s = float(scores[sym])
+            if s > 0:
+                result[sym] = s
+                self._last_breakout_levels[sym] = float(n_day_high[sym])
+        return result
+
+    def _process_confirmations(
+        self, date: str, filtered_eligible: list[str],
+    ) -> dict[str, float]:
+        """Process pending breakout confirmations.
+
+        On each day:
+        1. Record today's breakout candidates in _pending_confirmations
+        2. Check previously pending candidates: if confirmation_days elapsed,
+           verify price still > breakout_level. If yes → confirmed entry.
+           If no → discard.
+        3. Return confirmed entries {sym: score}.
+
+        Uses only data available on `date` (no future data).
+        """
+        if self.confirmation_days <= 0:
+            return {}
+
+        prices = self._prices_pivot
+        if prices is None or not self._pending_confirmations:
+            return {}
+
+        common = [s for s in self._pending_confirmations if s in prices.columns]
+        if not common:
+            return {}
+
+        date_mask = prices.index <= date
+        if len(date_mask) == 0:
+            return {}
+
+        today_close = prices.loc[date_mask, common].iloc[-1]
+
+        confirmed: dict[str, float] = {}
+        expired: list[str] = []
+
+        for sym in common:
+            info = self._pending_confirmations[sym]
+            breakout_date = info["breakout_date"]
+            # Count trading days since breakout
+            bd_mask = prices.index <= date
+            bd_idx = prices.index.get_loc(breakout_date) if breakout_date in prices.index else -1
+            td_idx = prices.index.get_loc(date) if date in prices.index else -1
+            if bd_idx < 0 or td_idx < 0:
+                expired.append(sym)
+                continue
+            days_elapsed = td_idx - bd_idx
+            if days_elapsed >= self.confirmation_days:
+                # Confirmation due: check price still > breakout level
+                if sym in today_close.index and today_close[sym] > info["breakout_level"]:
+                    confirmed[sym] = info["score"]
+                # Either way, remove from pending
+                expired.append(sym)
+
+        for sym in expired:
+            del self._pending_confirmations[sym]
+
+        return confirmed
 
     def _evaluate_pullback_batch(
         self, date: str, eligible: list[str], market_data: pd.DataFrame,

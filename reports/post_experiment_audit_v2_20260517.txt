@@ -1,0 +1,109 @@
+======================================================================
+Post-Experiment Audit v2 (补充 FB Rate 实测数据)
+日期: 2026-05-17
+======================================================================
+
+## TASK 3 (补测): False Breakout Rate Raw Candidate 层实测
+
+### 方法
+使用 scripts/diagnose_entry_quality.py (修复 breakout_pct_min 过滤器后)
+计算 2022-01-01 ~ 2024-12-31 区间 raw breakout candidates 的 5 日假突破率。
+
+### 实测结果
+
+| Experiment | FB Rate | New Entries | Total Cand | Δ FB | Type |
+|-----------|---------|-------------|-----------|------|------|
+| baseline | 48.5% | 2326 | - | - | candidate |
+| B:pct_min=0.5 | 44.8% | 2087 | - | -3.7pp | candidate |
+| B:pct_min=1.0 | 42.0% | 1830 | - | -6.5pp | candidate |
+| A:dynamic_topn | ~48.5% | - | - | 0 | position |
+| D:rank=1.5/2.0/3.0 | ~48.5% | - | - | 0 | position |
+| C:confirm=1/2 | ~48.5% | - | - | ~0 | mixed* |
+
+* C (confirmation_delay) 不改变 raw candidate 是否为假突破，
+  只改变 "哪些 candidate 最终被买入"。Raw FB rate 不应变化。
+
+### 分析
+
+1. breakout_pct_min 确实降低了 raw FB rate:
+   - 0.5%: 48.5% → 44.8% (-3.7pp, new entries -10%)
+   - 1.0%: 48.5% → 42.0% (-6.5pp, new entries -21%)
+
+2. 但即使在 1.0% 阈值下，FB rate 仍为 42.0%，**未达到 ≤35% 目标**
+
+3. 过滤器以牺牲 entry 数量为代价: 1.0% 阈值使候选减少 21%
+
+4. 原始诊断 (2018-2026) 显示 true/false breakout magnitude 分别为
+   3.53% vs 1.98%。pct_min=1.0% 过滤了大部分 <1.0% 的突破 (主要是假突破)，
+   但仍有大量 1.0-2.0% 的假突破未被过滤。
+
+5. D (rank_buffer) 是持仓层机制，不改变 raw candidate 的 FB rate
+6. A (dynamic_topn) 是 top_n 调节，不改变 raw FB rate
+7. C (confirmation_delay) 改变了 entry timing，但 raw candidate FB rate 不变
+
+### 停止条件最终验证
+
+| 实验 | overlap≥40% | FB≤35% | cost×3>-5% | 全部? |
+|------|------------|--------|-----------|------|
+| baseline | FAIL(20.7) | FAIL(48.5) | PASS(0.06) | NO |
+| A: dtn | FAIL(20.7) | FAIL(48.5) | PASS(0.06) | NO |
+| B: 0.5 | FAIL(20.9) | FAIL(44.8) | PASS(-0.13) | NO |
+| B: 0.75 | FAIL(21.7) | - | PASS(-0.03) | NO |
+| B: 1.0 | FAIL(21.0) | FAIL(42.0) | PASS(0.05) | NO |
+| D: 1.5 | PASS(40.6) | FAIL(48.5*) | PASS(0.62) | NO |
+| D: 2.0 | PASS(40.3) | FAIL(48.5*) | PASS(0.29) | NO |
+| D: 3.0 | PASS(40.5) | FAIL(48.5*) | PASS(0.70) | NO |
+| C: 1 | FAIL(17.5) | FAIL(48.5*) | FAIL(-6.57) | NO |
+| C: 2 | FAIL(17.8) | FAIL(48.5*) | FAIL(-8.40) | NO |
+
+* D/C 类实验 raw FB rate 与 baseline 相同 (持仓层机制)
+
+**无任一实验同时达成 overlap≥40% AND FB≤35%。**
+
+======================================================================
+
+## TASK 5 (更新): Final Revised Conclusion
+
+### 可确认的结论 (全部经过数据验证)
+
+1. ✅ Baseline tri-metrics 完美复现: ann=7.92%, dd=-8.56%, trades=1138
+2. ✅ Fitness gap 已解释: Method A (1.943) vs Method B (2.321), delta 来自 train_calmar 口径
+3. ✅ dynamic_topn = Category A: 正确实现但被 RegimeEngine 完全覆盖
+4. ✅ breakout_pct_min 降低 raw FB rate (48.5%→42.0%)，但不足以达到 35%
+5. ✅ rank_buffer 是唯一 overlap≥40% 的机制，但 ann 暴跌 62%
+6. ✅ confirmation_delay 在所有维度上均劣于 baseline
+7. ✅ **无一实验同时达成 overlap≥40% AND FB≤35%**
+
+### 仍不能确认的
+
+- FB rate 的 "effective" 版本 (实际买入后的假突破率) — 需跨 join 策略选股与价格数据
+- Method B fitness 与 Candidate B 2.304 的 0.017 微小差异 (end date / MD5 未验证)
+
+### 最终判定
+
+**不建议在当前 trend_breakout v2 结构上继续 GA。**
+
+理由:
+1. 4 类过滤器穷举完毕，无一同时达成两个停止条件
+2. 根本瓶颈在 breakout_pct × log(1+vol_boost) 公式的区分度不足 (raw FB rate 48.5%)
+3. RegimeEngine 将每日有效仓位压至 0-1 只，任何过滤器都作用在极窄空间上
+4. 策略收益过度集中 (2024 年贡献 56% 总收益)
+
+### 建议下一步 (推荐 B → C，不建议 E)
+
+**优先 B: 重新设计 breakout scoring formula**
+- 当前公式区分度不足 (true 3.53% vs false 1.98% avg magnitude)
+- 可考虑: 突破后持续天数加权、实体占比、相对 MA 距离、板块确认
+- 目标: 将 raw FB rate 从 48.5% 降至 <35%
+
+**次选 C: 调整 RegimeEngine 最小分散度**
+- 当前 regime 在 breadth>30% 时仍仅允许 0-1 只 → 过度保守
+- 可考虑: breadth>40% 时保证最小 3-5 只持仓
+
+**不推荐 E (暂停):** 问题已量化，知道方向，不需要暂停
+
+**不推荐 A (修复口径):** 口径不影响实验结论方向
+
+**不推荐 D (数据偏差):** 历史成分股已使用 quarterly snapshot
+
+======================================================================
