@@ -1,38 +1,61 @@
-# EXECUTION — 2026-05-17 (FINAL)
+# EXECUTION — 2026-05-18 (RESEARCH CYCLE END)
 
-## Completed: Full trend_breakout v2 Diagnostic Cycle
+## Completed: Full Alpha Research Cycle (6 directions)
 
 ### Code Changes (this session, uncommitted)
-- `qts/strategies/trend_breakout.py`: +breakout_pct_min, +confirmation_days, +dynamic_top_n,
-  sell_rank_multiplier int→float, +_signal_log, +reset(), +_log_signal(),
-  +_process_confirmations(), int(sell_top_n) fix
-- `scripts/run_entry_experiment.py` (new): unified experiment runner
-- `scripts/diagnose_entry_quality.py` (new): entry signal diagnosis + FB rate
-- `scripts/audit_entry_experiments.py` (new): 4-task post-experiment audit
-- `scripts/taxonomy_signal_count.py` (new): L0-L10 signal chain taxonomy
-- `scripts/evaluate_scoring_redesign.py` (new): offline scoring evaluation (5 variants)
-- `scripts/day_level_gate_audit.py` (new): day-level gate analysis
+
+**New scripts (3)**:
+- `scripts/evaluate_cross_sectional_alpha.py` — single-factor IC scanner (momentum + reversal modes)
+- `scripts/diagnose_pair_universe.py` — A0 pair universe + mean reversion diagnostics
+- `scripts/diagnose_pair_walkforward.py` — A0.5 walk-forward + non-overlap trade simulation
+
+**Updated docs (3)**:
+- `HANDOFF.md` — full research cycle summary
+- `TASK.md` — task completion record
+- `EXECUTION.md` — this file
+
+### Reports Generated (10 substantive + 6 smoke/debug)
+
+**Substantive reports (commit-eligible)**:
+| # | Report | Phase | Verdict |
+|---|--------|-------|---------|
+| 1 | `project_status_20260517.md` | Status | — |
+| 2 | `cross_sectional_alpha_plan_20260517.md` | Plan | — |
+| 3 | `cross_sectional_alpha_report_20260517_235638.md` | Phase 1 | MARGINAL |
+| 4 | `reversal_defensive_factor_audit_20260518_001139.md` | Reversal | STOP |
+| 5 | `index_membership_event_audit_20260518.md` | C0 | WAIT |
+| 6 | `next_structure_research_plan_20260518.md` | 3-dir plan | — |
+| 7 | `pair_universe_feasibility_audit_20260518.md` | A0 | MARGINAL |
+| 8 | `pair_walkforward_feasibility_recheck_20260518.md` | A0.5 | FAIL |
+| 9 | `industry_rotation_data_audit_plan_20260518.md` | B0 plan | — |
+| 10 | `industry_rotation_data_audit_20260518.md` | B0 audit | WAIT |
+
+**Smoke/debug reports (do NOT commit)**:
+- `cross_sectional_alpha_report_20260517_234821.md` (+csv)
+- `cross_sectional_alpha_report_20260517_234952.md` (+csv)
+- `cross_sectional_alpha_report_20260517_235301.md` (+csv)
+- `cross_sectional_alpha_report_20260517_235638.csv`
+- `reversal_defensive_factor_audit_20260518_001139.csv`
+
+### Data Files (do NOT commit)
+- `data/pair_industry_map.json` — partial industry map (A0)
+- `data/pair_diagnostics_top50.csv` — A0 pair diagnostics
+- `data/pair_walkforward_trades.csv` — 5394 trades (A0.5)
+- `data/pair_walkforward_periods.csv` — 14 periods (A0.5)
+- `data/industry_classification_full.json` — 106 classified + 174 unknown
+- `data/industry_classification_shenwan.json` — Shenwan attempt (failed)
 
 ### Bugs Found & Fixed
-- CONST_PATH: historical_constituents.json at wrong path → audit median=40 was wrong
-- sell_rank_multiplier: int→float for rank_buffer experiments
-- top_n: diagnose default 15→10 (Candidate B uses 10)
-- top20% overlap: set(symbols) bug → row-level join (100% sanity check)
-
-### 5-Round Diagnostic Cycle
-
-| Round | Topic | Key Finding |
-|-------|-------|-------------|
-| 1 | Entry quality diagnosis | Signal scarcity, 48.4% FB, 78% rotation |
-| 2 | 9 single-factor experiments | A/B/C/D all fail stop conditions |
-| 3 | Taxonomy audit | median=40 bug found & fixed; correct median=1 |
-| 4 | Scoring redesign | 5 variants fail offline; within-day discrimination ≈0 |
-| 5 | Day-level gate audit | Good day=36.9%; day gates add ≤10pp max |
-
-### Final Verdict
-trend_breakout v2 alpha structure PAUSED.
-Stock-level alpha decay (80.7% next-day-out) dominates all improvements.
-Do NOT GA. Do NOT Paper Trading. Open new alpha research.
+1. LOOKBACK_START too short for 60d features → changed to 2018-01-01
+2. HS300 data only from 2022-01-04 for most constituents → min_history reduced 120→60
+3. DatetimeArray.sort() → removed
+4. mask_initial() returning NoneType → simplified exclusion counting
+5. ic_results[fname] not stored → added storage line
+6. Pair walk-forward: positional vs label-based indexing → switched to label-based
+7. SH stock industry API rate-limited → documented limitation
 
 ### Not Modified
-broker, engine, data pipeline, GA optimizer
+broker, engine, data pipeline, GA optimizer, all strategy code, Parquet data files
+
+### Next
+Await commit confirmation. Next research cycle starts from data infrastructure upgrade.
