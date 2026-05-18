@@ -1,58 +1,120 @@
-# TASK — 2026-05-18
+# TASK — 当前唯一任务
 
-## Next Task: B1 — Industry Rotation Offline Evaluation
+## B1 — Industry Rotation Offline Evaluation
 
-### Goal
-Evaluate whether industry-level momentum rotation on HS300 produces excess returns
-over the HS300 benchmark, using the newly built industry classification map.
+### 目标
 
-### Data Available
-- `data/meta/industry_classification.csv` — 280/280 HS300, 65 labels, 39 effective
-- `data/raw/HS300_daily.parquet` — daily OHLCV
-- `data/raw/index/sh000300_daily.parquet` — HS300 index
-- `data/historical_constituents.json` — quarterly constituents
+验证行业级别月频轮动是否能在 HS300 股票池上产生稳定超额收益。
 
-### Allowed
-- Build industry portfolios from HS300 constituents (equal-weight within industry)
-- Compute industry-level features: momentum, volatility, volume ratio, relative strength
-- Monthly rebalance simulation (signal at month-end, entry at T+1 open)
-- Compare vs HS300 official index and HS300 equal-weight benchmark
-- Generate offline evaluation report
+---
 
-### Not Allowed
-- No strategy code changes (`qts/strategies/`)
-- No backtest engine integration
-- No GA optimization
-- No Paper Trading
-- No data/raw parquet writes
-- No pair trading
+## 1. 输入数据
 
-### Required Reading (new session)
-- `CLAUDE.md`
-- `HANDOFF.md`
-- `TASK.md` (this file)
-- `reports/industry_classification_map_report_20260518.md`
-- `reports/industry_classification_source_audit_20260518.md`
-- `reports/industry_rotation_data_audit_plan_20260518.md`
+```text
+data/meta/industry_classification.csv
+data/raw/HS300_daily.parquet
+data/raw/index/sh000300_daily.parquet
+data/historical_constituents.json
+```
 
-### Pass Conditions
-- Annualized excess > 3% after costs vs HS300
-- Information Ratio > 0.3
-- At least 3/5 years outperforming
-- Max relative drawdown < 10%
-- 2025-2026 does NOT fail (critical, Pair failed here)
-- Monthly turnover < 50%
+必读报告：
 
-### Stop Conditions
-- Excess ≤ 0 or IR < 0.1
-- 2025-2026 excess negative
-- Only 1-2 years effective
-- Industry concentration (top 3 industries > 60% of positions)
+```text
+reports/industry_classification_source_audit_20260518.md
+reports/industry_classification_map_report_20260518.md
+reports/industry_rotation_data_audit_plan_20260518.md
+```
 
-### Expected Output
-`reports/industry_rotation_offline_eval_202605XX.md`
+---
 
-### Do NOT
-- git add / commit / push without explicit confirmation
-- Run GA or Paper Trading
-- Modify strategy code
+## 2. 允许事项
+
+```text
+构建 HS300 行业组合收益序列
+行业内等权收益
+成交额加权版本作为对照
+计算行业动量、相对强度、波动率、宽度、量能
+月末信号，T+1 open 建仓
+月频 top-3 / top-5 行业 offline evaluation
+对比 official HS300 和 HS300 equal-weight benchmark
+生成 reports/industry_rotation_offline_eval_YYYYMMDD.md
+```
+
+---
+
+## 3. 禁止事项
+
+```text
+不改 qts/strategies/
+不接正式回测引擎
+不跑 GA
+不进入 Paper Trading
+不写 data/raw parquet
+不继续 Pair 参数优化
+不使用 git add .
+不 commit / push，除非用户明确确认
+```
+
+---
+
+## 4. 评估要求
+
+必须输出：
+
+```text
+行业数量和覆盖率
+行业日收益序列质量
+等权 vs 成交额加权对比
+official HS300 benchmark
+HS300 equal-weight benchmark
+月度换手率
+成本后收益
+分年结果
+2022 熊市
+2024 924 前后
+2025-2026 近期表现
+最大相对回撤
+信息比率
+```
+
+---
+
+## 5. 通过条件
+
+| 条件 | 阈值 |
+|---|---:|
+| 年化超额收益 | > 3%，扣成本后 |
+| 信息比率 | > 0.3 |
+| 分年跑赢 | 至少 3/5 年 |
+| 最大相对回撤 | < 10% |
+| 2025-2026 | 不失效，excess 不为负 |
+| 月度 win rate | > 55% |
+| 月度换手 | < 50% |
+| 行业集中度 | top3 行业不得长期占 > 60% |
+
+---
+
+## 6. 停止条件
+
+任一触发则停止，不接回测：
+
+```text
+excess <= 0
+IR < 0.1
+2025-2026 excess < 0
+只在单一年份有效
+收益集中在 1-2 个行业
+成本后失效
+数据覆盖/行业组合质量不足
+```
+
+---
+
+## 7. 预期输出
+
+```text
+reports/industry_rotation_offline_eval_YYYYMMDD.md
+必要时新增 scripts/evaluate_industry_rotation.py
+```
+
+若新增脚本，必须同步 `FILE_INVENTORY.md`。

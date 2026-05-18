@@ -1,6 +1,6 @@
 ---
 name: quant-code-quality-gate
-description: Use this skill when modifying Python code or scripts in this quantitative trading project, including diagnostic scripts, data loaders, paper-mode, backtest, broker, replay tools, data update tools, and code that affects experiment results. Enforce small-step implementation, immediate validation, diff self-review, data-source alignment, reliability labeling, and stop-on-risk behavior. Do not use for ordinary discussion, pure HTML reports, handoff-only tasks, or documentation-only edits unless code/scripts are also modified.
+description: Use this skill when modifying Python code or scripts in this quantitative trading project, including diagnostic scripts, data loaders, paper-mode, backtest, broker, replay tools, data update tools, report-generation scripts, and code that affects experiment results. Enforce small-step implementation, immediate validation, diff self-review, data-source alignment, reliability labeling, network safety, token safety, and stop-on-risk behavior. Do not use for ordinary discussion, pure handoff-only tasks, or Markdown-only documentation edits unless code/scripts are also modified.
 ---
 
 # Quant Code Quality Gate
@@ -21,11 +21,14 @@ Required workflow:
 This project is sensitive to subtle mistakes such as:
 
 - using the wrong market data source;
-- allowing non-constituent stocks into paper-mode or replay;
+- mixing qfq / raw / hfq price assumptions;
+- allowing non-constituent stocks into paper-mode, replay, or research outputs;
 - confusing stale prices, skipped days, and low coverage;
 - treating partial data as reliable strategy evidence;
 - triggering provider bans with unsafe batch requests;
-- missing untracked files because they do not appear in `git diff --stat`.
+- leaking provider tokens into scripts, reports, logs, or commits;
+- committing temporary research CSVs or local cache files;
+- missing untracked files because they do not appear in normal `git diff --stat`.
 
 ---
 
@@ -35,7 +38,9 @@ Use this skill for:
 
 - Python code changes;
 - diagnostic scripts;
+- report-generation scripts;
 - data loaders and update scripts;
+- metadata builders, including `data/meta` asset builders;
 - paper-mode logic;
 - backtest / replay logic;
 - broker / fill / order logic;
@@ -46,10 +51,10 @@ Use this skill for:
 Do not use this skill for:
 
 - pure discussion;
-- pure HTML report generation;
-- pure handoff generation;
 - Markdown-only edits;
-- summarizing existing output without code changes.
+- handoff-only tasks;
+- Phase A/B/C documentation restructuring unless Python code or scripts are modified;
+- pure HTML report generation when no Python script is changed.
 
 If a task includes both code and reports, use this skill for the code portion.
 
@@ -72,12 +77,15 @@ Before editing, classify the change as one of:
 - production code;
 - diagnostic script;
 - data update tool;
+- metadata builder;
 - report generator;
 - documentation;
 - local config;
 - temporary scratch.
 
 Do not let a diagnostic-only change become a production trading behavior change.
+
+Do not let a metadata task silently become a strategy, backtest, or data-pipeline behavior change.
 
 ---
 
@@ -88,6 +96,7 @@ Before editing code:
 ```bash
 git status --short
 git diff --stat
+git diff --name-status
 ```
 
 Then state:
@@ -97,9 +106,10 @@ Then state:
 3. whether production behavior changes;
 4. whether network access is needed;
 5. smallest validation command;
-6. whether relevant files are untracked.
+6. whether relevant files are untracked;
+7. whether any untracked files are unrelated and must be ignored.
 
-If unrelated changes exist, keep the current task narrow.
+If unrelated changes exist, keep the current task narrow and do not stage them.
 
 ---
 
@@ -119,7 +129,9 @@ If more than three files are needed, group them by purpose:
 - production fix;
 - diagnostic tooling;
 - data update / network safety;
-- report / documentation;
+- metadata asset generation;
+- report generation;
+- documentation;
 - local config.
 
 ---
@@ -136,7 +148,7 @@ python -m py_compile <changed_file>
 
 Use the smallest no-network smoke test when compile is not enough.
 
-Do not use large replay, backtest, or provider requests as first validation.
+Do not use large replay, backtest, full-market update, or provider requests as first validation.
 
 ---
 
@@ -145,11 +157,14 @@ Do not use large replay, backtest, or provider requests as first validation.
 Must check:
 
 - correct input data source;
+- explicit adjusted/raw/qfq assumptions;
 - no silent hiding of missing data;
 - skipped days separate from stale positions;
 - low coverage separate from fully skipped days;
 - reliability label is present;
-- no fallback to unfiltered universe unless explicitly intended.
+- no fallback to unfiltered universe unless explicitly intended;
+- sample size and coverage are reported;
+- output cannot be mistaken for live-trading evidence.
 
 ---
 
@@ -159,14 +174,48 @@ Must preserve or add:
 
 - dry-run mode;
 - bounded symbol set;
-- `--max-symbols` guard;
+- `--max-symbols` or equivalent guard;
 - rate limit;
 - bounded retry count;
 - consecutive-failure circuit breaker;
 - separate failed and skipped symbols;
-- clear provider failure reporting.
+- clear provider failure reporting;
+- no token printing beyond `token exists` or `token_len`.
 
 Never run all-market pulls unless explicitly requested.
+
+Stop when provider blocking is suspected.
+
+---
+
+### Metadata asset builders
+
+Use this section for files such as:
+
+```text
+data/meta/industry_classification.csv
+```
+
+Rules:
+
+- Metadata assets under `data/meta/` may be versioned only when explicitly approved.
+- `data/raw/*` remains protected and must not be overwritten.
+- Metadata builder scripts must be reproducible.
+- Reports must include source, timestamp, row count, coverage, missing items, and field definitions.
+- If using a provider token, do not write it to scripts, reports, CSVs, logs, or committed files.
+- It is acceptable to print `token exists` or `token_len`; never print token value.
+- If the metadata is incomplete, label it incomplete and do not promote it as a permanent asset.
+
+For industry classification assets, verify at minimum:
+
+- total rows;
+- unique symbols;
+- HS300 coverage;
+- missing HS300 symbols;
+- unique industry labels;
+- effective industries by minimum stock count;
+- source label and update date;
+- whether classification is official or provider-specific.
 
 ---
 
@@ -200,9 +249,26 @@ Must verify:
 
 ---
 
+### Report-generation scripts
+
+If generating or modifying Python scripts that produce HTML, Markdown, CSV, or JSON reports:
+
+- compile the script;
+- run a smallest-input smoke test if possible;
+- verify output path is under `reports/` or an explicitly approved path;
+- never overwrite raw experiment outputs;
+- do not fabricate missing metrics;
+- label missing fields clearly;
+- ensure report conclusion is evidence-grounded;
+- do not claim live-trading readiness unless safety checks are explicitly verified.
+
+For pure HTML tasks with no Python changes, use `quant-html-report` instead.
+
+---
+
 ## Reliability labels
 
-Any replay or diagnostic output must label reliability.
+Any replay, diagnostic, or research output must label reliability.
 
 ### Fully reliable
 
@@ -211,8 +277,10 @@ All must be true:
 - skipped_days = 0;
 - low_coverage_days = 0;
 - stale days are zero or fully explained;
-- data source matches production;
-- no unfiltered universe contamination.
+- data source matches production or the intended research source;
+- no unfiltered universe contamination;
+- no provider failure affected the result;
+- no lookahead bias is present.
 
 ### Partially reliable
 
@@ -220,7 +288,8 @@ Use when:
 
 - no full-day skips occurred;
 - one or more low-coverage days exist;
-- output validates code flow but not strategy performance.
+- output validates code flow but not strategy performance;
+- research uses incomplete but explicitly labeled data.
 
 ### Not reliable
 
@@ -230,9 +299,11 @@ Use when:
 - severe low coverage affects the target period;
 - data source inconsistency exists;
 - provider/network failure affected results;
-- unfiltered universe contamination exists.
+- unfiltered universe contamination exists;
+- lookahead bias is possible or confirmed;
+- stale, incomplete, or biased data drives the conclusion.
 
-Never present NAV, Max DD, trades, exposure, or holding-period stats as strategy evidence unless reliability is fully reliable.
+Never present NAV, Max DD, trades, exposure, hit rate, or holding-period stats as strategy evidence unless reliability is fully reliable.
 
 ---
 
@@ -241,14 +312,53 @@ Never present NAV, Max DD, trades, exposure, or holding-period stats as strategy
 For provider-backed data pulls:
 
 - use dry-run first when possible;
-- use `--max-symbols` for smoke tests;
+- use bounded symbol or date ranges for smoke tests;
 - keep rate limits enabled;
 - keep retry count bounded;
 - stop after circuit breaker threshold;
-- do not continue after signs of IP ban, provider blocking, RST, DNS failure, or persistent timeout;
-- separate successful, failed, and skipped symbols.
+- do not continue after signs of IP ban, provider blocking, RST, DNS failure, persistent timeout, or repeated RemoteDisconnected;
+- separate successful, failed, and skipped symbols;
+- report provider instability clearly.
 
 If provider blocking is suspected, stop and report. Do not keep probing unless explicitly requested.
+
+---
+
+## Token and secret safety
+
+Provider tokens and credentials must not appear in:
+
+- Python scripts;
+- Markdown reports;
+- HTML reports;
+- CSV / JSON outputs;
+- logs;
+- git diffs;
+- committed files.
+
+Allowed outputs:
+
+```text
+token exists
+token_len = <length>
+```
+
+Not allowed:
+
+```text
+token = actual_value
+Authorization header value
+API key value
+.env contents
+```
+
+Before staging code or report files after token-related work, run a targeted secret check such as:
+
+```bash
+grep -R "token\|TOKEN\|api_key\|password\|sk-" -n <changed_paths> 2>/dev/null
+```
+
+If a secret appears, stop and remove it before continuing.
 
 ---
 
@@ -271,13 +381,25 @@ Remember:
 
 Do not stage:
 
+- `.env` or secrets;
+- `handoff/git_backup/`;
+- backup bundles;
 - `.claude/hooks/`;
 - hook logs;
-- secrets or tokens;
 - local scratch files;
 - temporary backups;
 - generated machine artifacts unless intentionally versioned;
-- large report directories unless explicitly requested.
+- intermediate research CSVs such as pair trades, period trades, diagnostics caches, or smoke outputs;
+- incomplete industry maps or classification caches;
+- large report directories unless explicitly requested;
+- `data/raw/*` unless explicitly approved.
+
+Usually commit:
+
+- reproducible scripts;
+- concise summary reports;
+- approved metadata assets under `data/meta/`;
+- documentation updates that match the current project state.
 
 Do not push unless explicitly requested.
 
@@ -295,9 +417,11 @@ Stop and ask before continuing if:
 - network validation is needed while provider is unstable;
 - data coverage is insufficient for strategy evaluation;
 - a result looks good because data was skipped or filtered unexpectedly;
+- lookahead bias is possible;
 - many unrelated files are modified;
 - deletion of data, reports, or backups is required;
-- a secret or credential appears.
+- a secret or credential appears;
+- a temporary research artifact would need to be committed to make results reproducible.
 
 When stopping, state:
 
@@ -323,5 +447,6 @@ At the end of a code-changing task, reply with:
    - not reliable;
    - not applicable.
 7. Git status summary.
-8. Remaining risks.
-9. One recommended next step.
+8. Untracked file summary.
+9. Remaining risks.
+10. One recommended next step.

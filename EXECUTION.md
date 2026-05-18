@@ -1,66 +1,67 @@
-# EXECUTION — 2026-05-18 (FINAL)
+# EXECUTION — 最近执行记录
 
-## Completed This Session
+> 本文件记录最近阶段执行摘要。详细证据见 `reports/`。
 
-### 1. Cross-Sectional Alpha Evaluation
-- Phase 1: 13 features IC scan on HS300 (momentum)
-- Reversal/Defensive audit: 11 reversed features
-- Verdict: MARGINAL (momentum) / STOP (reversal)
-- Script: `scripts/evaluate_cross_sectional_alpha.py`
+---
 
-### 2. Pair Trading (A0 + A0.5)
-- A0: correlation-based pair universe, 254 pairs, 59.4% reversion
-- A0.5: walk-forward + non-overlap + T+1 open + trade filters
-- 5394 trades, mean excess +0.21%, after-cost -0.09%
-- 2025-2026 completely fails
-- Verdict: FAIL
-- Scripts: `diagnose_pair_universe.py`, `diagnose_pair_walkforward.py`
+## 2026-05-17 ~ 2026-05-18：Alpha Research Cycle
 
-### 3. Event-Driven Audit (C0)
-- `historical_constituents.json` insufficient for event research
-- Verdict: WAIT (data)
-- Report: `index_membership_event_audit_20260518.md`
+### 1. trend_breakout v2 封存
 
-### 4. Industry Classification Data Source Audit
-- Tested 4 sources: Tushare/jiaoch.site, AKShare CSRC, Shenwan, Eastmoney
-- Tushare stock_basic: 5515 A-shares, 280/280 HS300 (100%), 65 labels, 39 effective
-- Verdict: A (available)
-- Script: `verify_industry_classification_source.py`
+- Candidate B 保留为 historical baseline。
+- trend_breakout v2 不继续 GA，不进入 Paper Trading。
+- 关键问题：信号稀缺、rotation 高、假突破高、日内评分无区分度。
 
-### 5. Industry Classification Data Asset Built
-- `data/meta/industry_classification.csv` — committed project asset
-- 5515 rows, 640 KB, 280/280 HS300 coverage
-- Script: `build_industry_classification_map.py`
-- Report: `industry_classification_map_report_20260518.md`
+### 2. Tushare provider
 
-### Files Modified (this session)
-```
-HANDOFF.md, TASK.md, EXECUTION.md — updated multiple times
-```
+- 新增可选 Tushare / jiaoch.site provider。
+- 默认 provider 仍为 AKShare。
+- verify-only 支持不写 parquet 的口径验证。
 
-### Files Created (committed)
-```
-data/meta/industry_classification.csv
-scripts/evaluate_cross_sectional_alpha.py
-scripts/diagnose_pair_universe.py
-scripts/diagnose_pair_walkforward.py
-scripts/verify_industry_classification_source.py
-scripts/build_industry_classification_map.py
-reports/ (10 substantive + report_catalog)
-```
+### 3. HS300 横截面研究
 
-### Git Commits (this session)
-```
-74f679f research: archive cross-sectional and structure feasibility studies
+- `scripts/evaluate_cross_sectional_alpha.py`
+- 动量/趋势/量能单因子扫描：信号弱。
+- 反转/防御因子审计：无因子通过全部条件。
+
+### 4. Event-driven C0
+
+- `historical_constituents.json` 无公告日、真实生效日、调出数据。
+- C 方向 WAIT。
+
+### 5. Pair A0 / A0.5
+
+- A0 全样本 pair 发现存在未来函数风险。
+- A0.5 修正为 walk-forward、T+1 open、非重叠交易、excess 分离。
+- 结论：2025-2026 失效，after-cost excess 转负，Pair 暂停。
+
+### 6. Industry Classification
+
+- Tushare stock_basic 可用。
+- 构建 `data/meta/industry_classification.csv`。
+- 5515 A 股，280/280 HS300，65 行业标签，39 有效行业。
+- 行业分类阻塞解除。
+
+---
+
+## 最新提交记录参考
+
+```text
 c7102d4 data: add industry classification map (280/280 HS300, 65 labels)
+74f679f research: archive cross-sectional and structure feasibility studies
+9b18600 data: add optional tushare provider for incremental updates
+70f40de docs: update project status after trend breakout diagnostics
+8a36b95 research: archive trend_breakout v2 diagnostic cycle
 ```
 
-### Not Modified
-broker, engine, data pipeline, GA optimizer, all strategy code
+如本地 ahead origin/main，先尝试 push；网络阻断时保留本地 bundle，不要 reset。
 
-### Key Data Limitation Resolved
-Industry classification went from 37.9% (AKShare CSRC, SZ only) → 100% (Tushare/jiaoch.site, all HS300).
-This unblocks B (Industry Rotation) and enables same-industry filtering for A (Pair Trading).
+---
 
-### .env / Token Security
-`.env` created with TUSHARE_TOKEN, confirmed in `.gitignore`. Never committed.
+## 当前未完成
+
+```text
+B1 Industry Rotation Offline Evaluation
+```
+
+禁止直接进入回测、GA、Paper Trading。

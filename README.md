@@ -1,511 +1,157 @@
-# QTS - A股量化交易系统
+# QTS — A 股量化交易系统
 
-> Quantitative Trading System MVP  
-> 从数据、股票选择、因子、策略、回测、风控到交易看板的完整 A 股量化生产系统。
+> Quantitative Trading System for A-share daily / medium-frequency research.  
+> 目标是建立可信、可复现、可验证、可扩展的量化研究与交易基础设施。
 
 ---
 
 ## 1. 项目定位
 
-本项目不是一个简单的“自动买卖脚本”，而是一套面向 A 股的量化交易生产系统。
-
-核心目标：
+QTS 不是简单的自动买卖脚本，而是一套覆盖以下环节的量化交易系统：
 
 ```text
-交易经验
-→ 数字化因子
-→ 股票选择
-→ 策略信号
-→ 组合构建
-→ 回测验证
-→ 风控检查
-→ 模拟盘
-→ 小资金实盘
-→ 持续监控
-→ 策略迭代
+数据接入 → 本地存储 → 因子计算 → 策略研究 → 回测验证
+→ 风控 → 模拟盘 → 看板 → 未来小资金实盘
 ```
 
-当前重点不是追求复杂高频，而是先建立一套可信、可复现、可验证、可扩展的日频 / 中低频量化系统。
+当前重点是：**先完成可靠数据和离线研究闭环，不急于进入 Paper Trading 或实盘。**
 
 ---
 
-## 2. 当前项目状态
+## 2. 当前状态
 
-当前项目阶段：
+当前阶段：
 
 ```text
-MVP 1：本地回测系统 → Alpha 研究周期
+Industry Classification Solved → Ready for B1 Industry Rotation Offline Evaluation
 ```
 
-**当前基线: Candidate B** (historical baseline only, strategy paused)
+核心状态：
+
+| 模块 | 状态 |
+|---|---|
+| trend_breakout v2 | 已暂停，Candidate B 仅 historical baseline |
+| HS300 横截面动量/反转 | 已暂停，信号太弱 |
+| Pair long-only reversion | 已暂停，walk-forward 后 2025-2026 失效 |
+| Event-driven | WAIT，成分股事件数据不足 |
+| Industry Rotation | READY，行业分类已解决 |
+| Tushare provider | 已作为可选 provider 接入，默认仍 AKShare |
+| 行业分类数据资产 | `data/meta/industry_classification.csv`，5515 A 股，280/280 HS300 |
+
+详细状态见：`HANDOFF.md`。当前唯一任务见：`TASK.md`。
+
+---
+
+## 3. 重要入口文件
+
+| 文件 | 用途 |
+|---|---|
+| `CLAUDE.md` | Claude Code 工作宪法，只放长期规则 |
+| `HANDOFF.md` | 当前项目状态、风险、下一步 |
+| `TASK.md` | 当前唯一任务、验收标准、禁止事项 |
+| `EXECUTION.md` | 最近执行记录和验证结果 |
+| `FILE_INVENTORY.md` | 文件结构和重要文件用途 |
+| `docs/coordination/` | 多 Agent 编排、审计、Review Gate |
+| `.claude/agents/` | Claude Code subagents 定义 |
+| `.claude/skills/` | 可复用工作流 skill |
+| `reports/` | 研究报告和历史证据 |
+
+---
+
+## 4. 项目核心结构
+
+```text
+qts/data/        数据源、calendar、parquet storage、数据质量
+qts/factors/     因子计算
+qts/strategies/  策略逻辑，trend_breakout v2 已暂停
+qts/backtest/    回测引擎、broker simulation、performance
+qts/risk/        风控
+qts/execution/   执行层和模拟网关
+qts/diagnosis/   诊断模块
+scripts/         数据、回测、诊断、研究脚本
+data/meta/       元数据资产，如行业分类
+reports/         研究报告
+configs/         配置
+tests/           测试
+```
+
+详细文件清单见：`FILE_INVENTORY.md`。
+
+---
+
+## 5. 数据资产
+
+当前关键数据资产：
+
+| 资产 | 说明 |
+|---|---|
+| `data/raw/HS300_daily.parquet` | 日线行情，项目主行情数据 |
+| `data/raw/index/sh000300_daily.parquet` | HS300 指数行情 |
+| `data/historical_constituents.json` | 历史成分股快照，用于股票池过滤，不适合事件驱动 |
+| `data/meta/industry_classification.csv` | 行业分类映射，Tushare industry label，280/280 HS300 覆盖 |
+
+行业分类字段不是官方申万字段，当前标注为：
+
+```text
+Tushare industry label (Shenwan-style granular, not official Shenwan)
+```
+
+---
+
+## 6. 当前可信 baseline
+
+Candidate B 保留为 historical baseline，不升级 Paper Trading：
 
 | 指标 | 值 |
-|------|--:|
-| total_return | 84.10% |
+|---|---:|
 | annual_return | 7.90% |
 | max_drawdown | -8.56% |
-| GA fitness | 2.304 |
-| total_trades | 1137 |
+| fitness | 2.304 |
+| trades | 1137 |
 
-（Historical A baseline: 83.07% / -8.06% / 1.656）
-
-**Alpha 研究方向状态 (2026-05-18)**:
-
-| 方向 | 状态 |
-|------|------|
-| trend_breakout v2 | 暂停（单维度区分度不足） |
-| HS300 横截面 alpha (动量) | 暂停（IC IR 最高 0.089） |
-| HS300 横截面 alpha (反转) | 暂停（IC IR 最高 0.151） |
-| Pair long-only reversion | 暂停（walk-forward 2025-2026 失效） |
-| Event-Driven | 等待数据 |
-| **Industry Rotation** | **就绪**（行业分类已解决，下一步） |
-
-**数据基础设施**:
-- AKShare 日线 + Tushare 可选 provider
-- 行业分类数据资产：`data/meta/industry_classification.csv`（5515 A股, 280/280 HS300, 65 行业标签）
-- 详细文件结构见 [FILE_INVENTORY.md](FILE_INVENTORY.md)
+该策略结构已暂停，不继续 GA，不进入 Paper Trading。
 
 ---
 
-## 3. 项目结构
+## 7. 当前主线任务
 
-> 详细文件结构、每个文件的作用和维护说明见 **[FILE_INVENTORY.md](FILE_INVENTORY.md)**。
+当前主线：**B1 Industry Rotation Offline Evaluation**。
 
-核心分层：
+目标：用行业分类数据构建行业组合，评估行业级别月频轮动是否能产生稳定超额收益。
 
-```text
-qts/data/        数据层（AKShare + Tushare）
-qts/factors/     因子层
-qts/strategies/  策略层（trend_breakout v2 已暂停）
-qts/backtest/    回测引擎
-qts/execution/   执行层
-qts/risk/        风控层
-qts/diagnosis/   诊断模块
-scripts/         运行脚本（43 个，详见 FILE_INVENTORY）
-data/meta/       元数据（行业分类 CSV）
-reports/         研究报告
-```
+详细任务和验收标准见：`TASK.md`。
 
 ---
 
-## 4. 核心设计原则
-
-| 原则 | 含义 | 实现方式 |
-|---|---|---|
-| 策略与交易分离 | 策略只负责“买什么”，不负责“怎么买” | `Strategy` 只生成信号，`BrokerSimulator` / `BrokerGateway` 负责执行 |
-| 信号与订单分离 | 目标持仓不直接变成订单 | `PortfolioConstructor` → `OrderManager` → `Gateway` |
-| 下单与风控分离 | 每笔订单必须过风控 | `PreTradeRiskManager` 下单前强制校验 |
-| 配置与代码分离 | 改参数不改代码 | 策略参数 YAML 化，`pydantic` 校验 |
-| 回测与实盘共用策略 | 同一套策略逻辑可复用 | `Strategy` 抽象接口统一 |
-| 研究与实盘分离 | 研究和实盘运行环境可分开 | Linux 研究，Windows 交易机执行 |
-| 数据与计算分离 | 策略只读本地已清洗数据 | `MarketDataProvider` 隔离数据源 |
-
----
-
-## 5. A 股交易规则
-
-回测和模拟盘必须考虑 A 股特点。
-
-当前系统已经支持或计划支持：
-
-| 规则 | 状态 | 说明 |
-|---|---|---|
-| T+1 卖出限制 | ✅ 已实现 | 当日买入次日才能卖出，有测试覆盖 |
-| 100 股整数手 | ✅ 已实现 | 买入取整到 100 倍数，有测试 |
-| 印花税 | ✅ 已实现 | 卖出单向万5，有测试 |
-| 佣金 | ✅ 已实现 | 买卖双向万2.5，最低5元，有测试 |
-| 涨跌停限制 | ✅ 已实现 | 成交价不超过涨跌停价，有测试 |
-| 停牌过滤 | ✅ 已实现 | 停牌不可交易，有测试 |
-| ST 过滤 | ✅ 已实现 | ST 默认排除，有测试 |
-| 滑点模型 | ✅ 已实现 | 买卖均施加 bps 滑点 |
-| 复权处理 | ✅ 已确认 | qfq 模式数据已前复权 |
-| 交易日历 | ✅ 已实现 | A 股真实交易日历 |
-| 过户费 | ❌ 未实现 | A 股过户费（金额极小，万0.1） |
-| 一字涨停过滤 | ❌ 未实现 | 涨停买不进、跌停卖不出未做 |
-| 退市风险 | ❌ 未实现 | 退市整理期未特殊处理 |
-| 新股异常波动 | ❌ 未实现 | 上市初期涨跌幅放宽未处理 |
-| 成交额容量限制 | ❌ 未实现 | 单笔交易额超当日成交额 2% 应拒绝 |
-
----
-
-## 6. 股票选择框架
-
-股票选择必须分成三层：
-
-```text
-股票池 Universe
-→ 过滤条件 Filter
-→ 排序 / 打分 Ranking
-```
-
-不允许在策略代码里随意硬编码股票列表，除非是用户明确指定的研究样本。
-
-### 6.1 股票池 Universe
-
-支持方向：
-
-```text
-全 A 股
-沪深 300
-中证 500
-中证 1000
-创业板
-科创板
-自定义股票池
-行业股票池
-主题股票池
-人工观察池
-```
-
-第一阶段优先支持（实际状态）：
-
-```text
-✅ 沪深 300         -- 299 只，2022-2026 数据
-✅ 中证 500         -- 500 只，已拉取
-✅ 创业板            -- 1397 只，已拉取
-✅ 科创板            -- 609 只，已拉取
-✅ 自定义股票池       -- 支持通过参数传入
-❌ 中证 1000         -- 未拉取（可随时加）
-❌ 行业股票池         -- 未实现
-❌ 主题股票池         -- 未实现
-```
-
-### 6.2 默认过滤规则
-
-默认过滤（实现状态）：
-
-```text
-✅ ST 股票
-✅ *ST 股票
-❌ 退市整理股票           -- 未实现
-✅ 停牌股票
-✅ 上市不足 120 日
-✅ 日成交额过低（可配置）
-❌ 过去 20 日成交天数不足   -- 未实现
-❌ 价格异常（<2元或>300元） -- 未实现
-❌ 一字涨停/跌停           -- 未实现
-❌ 财务数据异常            -- 未实现（需财务数据）
-```
-
-推荐配置：
-
-```yaml
-filters:
-  exclude_st: true
-  exclude_suspended: true
-  exclude_delisting: true
-  min_list_days: 120
-  min_avg_amount_20d: 50000000
-  min_trade_days_20d: 15
-  min_price: 2.0
-  max_price: 300.0
-```
-
-### 6.3 流动性过滤
-
-```yaml
-liquidity:
-  min_avg_amount_20d: 50000000
-  min_avg_turnover_20d: 0.005
-  max_order_amount_ratio: 0.02
-```
-
-含义：
-
-```text
-过去 20 日平均成交额不能太低。
-单笔买入金额不能超过当日成交额的一定比例。
-避免小票买不进、卖不出、滑点过大。
-```
-
-### 6.4 技术交易经验数字化
-
-传统看盘经验要转化为可计算信号：
-
-| 人工交易语言 | 系统表达 |
-|---|---|
-| 放量 | 当前成交量 / N 日均量 |
-| 缩量 | 当前成交量低于 N 日均量 |
-| 压力位 | N 日高点、前高、平台上沿 |
-| 支撑位 | N 日低点、均线、平台下沿 |
-| 突破 | 收盘价站上压力位一定比例 |
-| 回踩不破 | 回撤到支撑区间后重新收回 |
-| 假突破 | 长上影、次日低开、快速跌回平台 |
-| 趋势走好 | 均线多头、斜率向上、相对强度提升 |
-
-### 6.5 推荐第一批策略
-
-第一阶段优先实现和验证：
-
-1. 平台放量突破策略
-2. 突破后缩量回踩策略
-3. 均线趋势回踩策略
-4. 低波动趋势策略
-5. 假突破过滤器
-
----
-
-## 7. 因子设计
-
-因子是交易经验的数字化表达。
-
-每个因子必须明确：
-
-```text
-因子名称
-计算公式
-输入数据
-输出字段
-是否需要复权
-是否存在未来函数风险
-适用频率
-缺失值处理
-极值处理
-标准化方法
-排序方向
-```
-
-常用因子：
-
-```text
-momentum_20d
-momentum_60d
-volatility_20d
-volume_ratio_20d
-amount_ratio_20d
-turnover_20d
-breakout_60d
-distance_to_ma20
-distance_to_ma60
-drawdown_60d
-relative_strength_to_index
-```
-
----
-
-## 8. 回测指标
-
-任何策略回测至少输出：
-
-```text
-累计收益
-年化收益
-最大回撤
-夏普比率
-卡玛比率
-胜率
-盈亏比
-平均持仓天数
-换手率
-交易次数
-手续费
-滑点成本
-月度收益
-年度收益
-最大连续亏损
-最长回撤修复时间
-持仓明细
-交易明细
-```
-
-不允许只展示收益曲线。
-
----
-
-## 9. 回测可信度检查
-
-回测通过不代表策略有效。
-
-至少需要做：
-
-```text
-参数扰动
-时间切片
-样本外测试
-滑点加倍
-手续费加倍
-成交延迟
-容量限制
-牛市 / 熊市 / 震荡市分段表现
-收益来源拆解
-单票贡献分析
-年度稳定性分析
-```
-
-如果参数轻微变化后收益大幅崩溃，应标记为：
-
-```text
-疑似过拟合，不建议实盘。
-```
-
----
-
-## 10. 快速开始
+## 8. 基本运行示例
 
 ```bash
-cd D:/Trae_pro/cc/gushi
-
-# 1. 安装依赖
+# 安装依赖
 pip install -r requirements.txt
 
-# 2. 拉取数据
-python scripts/update_daily_data.py --start 2022-01-01 --end 2024-12-31 --universe HS300
+# 运行测试
+pytest -q
 
-# 3. 运行回测
-python scripts/run_backtest.py
+# 未来函数检查
+python scripts/check_future_leak.py
 
-# 4. 启动看板
-streamlit run qts/app/streamlit_app.py
+# 数据增量更新，默认 AKShare
+python scripts/incremental_update_data.py --provider akshare
 
-# 5. 运行测试
-pytest tests/ -v
+# Tushare verify-only，不写 parquet
+python scripts/incremental_update_data.py --provider tushare --verify-only
 ```
 
----
-
-## 11. 技术栈
-
-| 层级 | 技术 |
-|---|---|
-| 数据源 | AKShare + Tushare (jiaoch.site, 可选) |
-| 本地存储 | Parquet |
-| 因子计算 | Pandas / NumPy |
-| 策略配置 | YAML + Pydantic |
-| 回测引擎 | 自研日频回测 |
-| 前端 | Streamlit + Plotly |
-| 日志 | loguru |
-| 测试 | pytest |
+实际命令以当前脚本帮助和 TASK.md 为准。
 
 ---
 
-## 12. 路线图
+## 9. 协作原则
 
-### 已完成：MVP 1 基础回测系统
+- 不使用 `git add .`
+- 不提交 `.env`、token、backup bundle、临时 CSV、smoke/debug 报告
+- L2/L3 任务必须先计划、后执行、再 Review
+- 研究失败必须保留报告，不得隐藏
+- 新增重要文件时同步 `FILE_INVENTORY.md`
 
-- [x] 项目基础结构 + git 仓库
-- [x] A 股日线数据接入（AKShare）
-- [x] Parquet 本地存储 + 交易日历
-- [x] 因子计算框架（动量、波动率、换手率）
-- [x] 两套完整策略（多因子轮动 + 趋势突破 v2）
-- [x] 趋势突破 v2：五档优先级止损 + 三档仓位管理 + 道氏理论牛市过滤 + 策略熔断
-- [x] 三种执行模式（尾盘买入 / 次日开盘 / 当日收盘）
-- [x] A 股交易规则（T+1、手数、佣金、印花税、涨跌停、停牌、ST、滑点）
-- [x] 回测绩效指标（10+ 项，Streamlit 全中文解释）
-- [x] Streamlit 回测看板（5 Tab + 历史记录 + 参数存档）
-- [x] 21 项单元测试（全部通过）
-- [x] 未来函数系统检查（3 项全部 PASS）
-- [x] 复权确认（qfq 模式）
-- [x] 历史成分股数据（2022-2026）
-- [x] 参数敏感度分析（13 参数，全部 LOW/MEDIUM）
-
-### 已完成：MVP 1 验证与加固
-
-- [x] 未来函数检查、参数敏感性分析、幸存者偏差修正（季度快照）
-- [x] 向量化突破检测、冒烟测试、确定性修复、性能优化（-93%）
-- [x] 分环境诊断系统（qts/diagnosis/）
-- [x] F/D1/D2/D3 实验（rank buffer / pullback gate 未优于基线）
-- [x] trend_breakout v2 5 轮诊断（入场质量/评分重设计/日级 gate — 全部未通过）
-- [x] GA v2 暂停（baseline control 未对齐，不继续优化）
-- [x] HS300 横截面 alpha 评估（动量 13feat + 反转 11feat — IC IR 不足）
-- [x] Pair long-only reversion 评估（walk-forward 2025-2026 失效）
-- [x] 行业分类数据资产建立（Tushare stock_basic, 280/280 HS300）
-- [x] Tushare 可选 provider 接入
-
-### 进行中：新 Alpha 研究
-
-- [ ] **B1 Industry Rotation 离线评估**（39 个有效行业，月频轮动）
-- [ ] A Pair Trading 同行业过滤（行业数据已就绪，但 walk-forward 失败需重新设计）
-- [ ] C Event-Driven（等待公告/生效日数据）
-
-### 未来路线
-
-- [ ] 模拟盘系统（MVP 2）
-- [ ] 实盘半自动：调仓建议 → 人工确认 → 一键下单
-- [ ] 分钟级事件驱动回测
-- [ ] FastAPI + Vue / React 正式前端
-- [ ] 多策略组合调权
-
----
-
-## 13. 风险声明
-
-本项目用于量化研究和工程实践。
-
-回测结果不代表未来收益。  
-任何策略在实盘前必须经过：
-
-```text
-数据检查
-回测验证
-鲁棒性测试
-模拟盘验证
-小资金验证
-风控审查
-人工确认
-```
-
-不得将未验证策略直接用于实盘自动交易。
-
----
-
-## 14. CLAUDE.md 合规清单
-
-对照 CLAUDE.md 各节要求，标记完成状态。
-
-### 回测可信度（第 14 节）
-
-| 要求 | 状态 | 说明 |
-|------|:--:|------|
-| 参数扰动 | ✅ | `param_robustness.py --mode sensitivity` |
-| 时间切片 | ✅ | GA 周期划分（训练/验证/测试） |
-| 样本外测试 | ✅ | GA 有独立测试集 2025-07 ~ 2026-05 |
-| 滑点加倍 | ❌ | 待补充 |
-| 手续费加倍 | ❌ | 待补充 |
-| 成交延迟 | ⚠️ | next_open 模式已实现，需系统化测试 |
-| 容量限制 | ❌ | 待补充 |
-| 牛/熊/震荡分段 | ❌ | `param_robustness.py` 可扩展 |
-| 收益来源拆解 | ❌ | 待补充 |
-| 单票贡献分析 | ❌ | 待补充 |
-
-### 风控规则（第 16 节）
-
-| 要求 | 状态 |
-|------|:--:|
-| PreTradeRiskManager | ✅ |
-| KillSwitch | ✅ |
-| 策略状态机（5 模式） | ⚠️ 仅有正常/熔断两档 |
-| max_daily_loss | ❌ |
-| max_order_amount_ratio_to_volume | ❌ |
-
-### 测试覆盖（第 20 节）
-
-| 要求 | 状态 |
-|------|:--:|
-| T+1 / 手数 / 佣金 / 印花税 | ✅ 24 测试 |
-| 涨跌停 / 停牌 / ST | ✅ |
-| 未来函数 | ✅ |
-| 数据质量 | ✅ |
-| 风控拒绝违规订单 | ❌ 待补充 |
-| 回测可复现 | ❌ 待补充 |
-
-### 策略方向（第 11 节）
-
-| 策略 | 状态 |
-|------|:--:|
-| 11.1 平台放量突破 | ✅ `trend_breakout.py` |
-| 11.2 突破后缩量回踩 | ❌ |
-| 11.3 均线趋势回踩 | ❌ |
-| 11.4 低波动趋势 | ❌ |
-| 11.5 假突破过滤器 | ❌ |
-
-### 股票选择（第 9 节）
-
-| 要求 | 状态 |
-|------|:--:|
-| Universe / Filter / Ranking 三层 | ✅ |
-| 历史成分股按年份过滤 | ✅ 引擎自动加载+过滤 |
-| 全部默认过滤规则 | ⚠️ 6/10 已实现 |
-| 回踩确认 | ❌ |
-| 假突破过滤 | ❌ |
-
-**更新于 2026-05-10。**
+多 Agent 工作流见：`docs/coordination/README.md`。
