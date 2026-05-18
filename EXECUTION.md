@@ -58,10 +58,24 @@ c7102d4 data: add industry classification map (280/280 HS300, 65 labels)
 
 ---
 
+## 2026-05-18：B1 QA Review
+
+- QA 独立审查 B1 诊断报告。
+- 结论：**REQUEST_CHANGES**。CONDITIONAL PASS 降级为 OBSERVE。
+- 发现：
+  1. Static hold 通信设备（328%）碾压 rotation（~57%），削弱轮动价值
+  2. EW variants Ex-2025 基本失效（4/6 < 3.05%）
+  3. AW/EW 差距 2-3x 未解释，可能是大市值 beta
+- 不允许进入正式回测和 Paper Trading。
+- 下一步：B1 补充诊断（TASK.md Section 8）。
+
+---
+
 ## 当前未完成
 
 ```text
-B1 Industry Rotation Offline Evaluation
+B1 Industry Rotation — OBSERVE（QA REQUEST_CHANGES）
+B1 补充诊断（static hold 事前对比 + AW/EW 差距分解 + EW-only）
 ```
 
 禁止直接进入回测、GA、Paper Trading。

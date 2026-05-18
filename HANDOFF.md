@@ -12,7 +12,8 @@ trend_breakout v2：PAUSED
 Candidate B：historical baseline only
 Tushare provider：optional provider 已接入，默认仍 AKShare
 Industry classification：已解决，280/280 HS300 覆盖
-下一步：B1 Industry Rotation Offline Evaluation
+B1 Industry Rotation：OBSERVE / REQUEST_CHANGES（2026-05-18 QA 审查降级）
+下一步：B1 补充诊断（static hold 事前对比 + AW/EW 差距分解 + EW-only 诊断）
 ```
 
 当前工作区注意事项：
@@ -34,7 +35,7 @@ handoff/ 是本地备份目录，不提交
 | 反转/防御横截面 | Audit | STOP | 无因子通过全部条件 |
 | Event-driven | C0 | WAIT | 成分股事件数据无公告日/生效日/调出 |
 | Pair long-only reversion | A0.5 walk-forward | FAIL | 2025-2026 失效，after-cost excess 转负 |
-| Industry Rotation | B0 data | READY | 行业分类数据已解决 |
+| Industry Rotation | B1 eval → QA review | **OBSERVE** | CONDITIONAL PASS 降级，static hold 对比削弱轮动价值 |
 
 ---
 
@@ -80,17 +81,24 @@ source：Tushare / jiaoch.site stock_basic
 
 ## 6. 当前风险
 
-1. `c7102d4` 如未 push，需要网络恢复后推送。
-2. `handoff/` 为本地备份目录，不应提交。
-3. Industry Rotation 还没有做 B1 离线评估，不得进入 Paper Trading。
-4. `historical_constituents.json` 可用于回测股票池过滤，但不适合事件驱动研究。
-5. 行业分类是当前标签快照，回看历史存在行业分类后见偏差，B1 必须说明。
+1. `handoff/` 为本地备份目录，不应提交。
+2. `historical_constituents.json` 可用于回测股票池过滤，但不适合事件驱动研究。
+3. 行业分类是当前标签快照，回看历史存在行业分类后见偏差，B1 必须说明。
+4. **B1 QA REQUEST_CHANGES**（2026-05-18）：
+   - EW variants Ex-2025 基本失效（4/6 超额 < 3.05%）
+   - 2025 对全期收益贡献过大
+   - Static hold 通信设备（328%）碾压 rotation（~57%），削弱轮动价值
+   - AW/EW 差距 2-3x 未解释，可能是大市值 beta 而非行业轮动 alpha
 
 ---
 
 ## 7. 下一步建议
 
-执行 `TASK.md`：B1 Industry Rotation Offline Evaluation。
+执行 B1 补充诊断（TASK.md Section 8）：
+
+1. Static hold 事前对比：月末仅用当时已知数据，rotation vs static hold
+2. AW/EW 差距分解：行业选择 vs 大市值 beta 贡献
+3. EW-only 诊断：如果仅 AW 可行，B1 前提已变质
 
 原则：
 
@@ -101,4 +109,5 @@ source：Tushare / jiaoch.site stock_basic
 不跑 GA
 不进入 Paper Trading
 不写 data/raw parquet
+如果 Ex-2025 不能证明 rotation > static hold，封存 B1
 ```

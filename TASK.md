@@ -2,6 +2,8 @@
 
 ## B1 — Industry Rotation Offline Evaluation
 
+> **状态更新 2026-05-18**: QA Review → REQUEST_CHANGES。CONDITIONAL PASS 降级为 OBSERVE。需要补充诊断。
+
 ### 目标
 
 验证行业级别月频轮动是否能在 HS300 股票池上产生稳定超额收益。
@@ -49,6 +51,7 @@ reports/industry_rotation_data_audit_plan_20260518.md
 不接正式回测引擎
 不跑 GA
 不进入 Paper Trading
+不进入正式回测（QA 已拒绝）
 不写 data/raw parquet
 不继续 Pair 参数优化
 不使用 git add .
@@ -139,3 +142,53 @@ reports/industry_rotation_offline_eval_YYYYMMDD.md
 ```
 
 若新增脚本，必须同步 `FILE_INVENTORY.md`。
+
+---
+
+## 8. B1 补充诊断（QA REQUEST_CHANGES 后）
+
+> 2026-05-18 QA 审查结论： CONDITIONAL PASS → OBSERVE。需要补充以下诊断才能重新评估。
+
+### 8.1 Static Hold 事前对比
+
+```text
+问题：诊断报告 Section 8 显示通信设备 static hold（328%）碾压 rotation（~57%）
+      但这是事后视角 — 当时无法知道通信设备会是 2024-2025 最强行业
+要求：
+  - 月末仅用当时已知数据选择"最优 static hold 行业"（高动量行业）
+  - 对比 rotation top-3/top-5 vs 持有单一最佳行业
+  - 如果 rotation 在事前视角下仍然跑输 static hold，则 rotation 不增加价值
+```
+
+### 8.2 AW/EW 差距分解
+
+```text
+问题：AW 超额是 EW 的 2-3x，未解释
+      银行（23 只）+ 证券（22 只）在 AW 中权重远高于 EW
+要求：
+  - 分解 AW 超额中的行业选择贡献 vs 大市值 beta 贡献
+  - 对比 AW rotation vs HS300 官方指数（市值加权）
+  - 如果 AW 超额主要来自大市值行业集中，则不属于轮动 alpha
+```
+
+### 8.3 EW-only 诊断
+
+```text
+问题：EW 变体 Ex-2025 几乎全部失败（4/6 超额 < 3.05%）
+      B1 前提是"行业级别收益序列信噪比 > 个股级别"
+      如果 EW（最纯粹的行业 beta）不行，前提动摇
+要求：
+  - EW 变体 Ex-2025 是否在统计上显著 > 0
+  - EW 是否在任一单一 regime 中可靠
+  - 如果仅 AW 可行，B1 的"行业轮动"标签应改为"大市值行业动量"
+```
+
+### 8.4 封存条件
+
+```text
+如果以上三项诊断无法证明：
+  1. rotation 在事前视角下优于 static hold
+  2. EW 在 Ex-2025 有独立 alpha
+  3. AW 超额不是单纯的大市值 beta
+则封存 B1，写入 HANDOFF.md，不接回测。
+```
