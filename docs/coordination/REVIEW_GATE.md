@@ -1,5 +1,17 @@
 # REVIEW_GATE
 
+## Agent Teams Gate
+
+启用 Agent Teams 时，QA 必须额外检查：
+
+```text
+是否按 AGENT_TEAMS.md 分配 teammate
+是否存在同一文件多 teammate 并行编辑
+reviewer 是否保持只读
+lead 是否综合所有 teammate 结果
+是否把技术 PASS 误写成可交易 / 可 Paper Trading
+```
+
 ## QA Gate
 
 检查：

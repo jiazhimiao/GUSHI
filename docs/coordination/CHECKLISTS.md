@@ -1,5 +1,18 @@
 # CHECKLISTS
 
+## Agent Teams
+
+启用 Agent Teams 前确认：
+
+```text
+任务等级为 L2/L3，且并行审查有价值
+已读取 docs/coordination/AGENT_TEAMS.md
+每个 teammate 有明确 owner / allowed files / forbidden files
+同一文件没有多个 editor
+reviewer 默认只读
+lead 负责最终综合和写入决策
+```
+
 ## 提交前
 
 ```bash

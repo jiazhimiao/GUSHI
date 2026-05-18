@@ -28,6 +28,7 @@
 | `PROJECT_INDEX.md` | 项目入口索引和当前主线 |
 | `TASK_LEVELS.md` | L0-L3 任务等级 |
 | `MULTI_AGENT_ORCHESTRATION.md` | 多 Agent 路由和工作流 |
+| `AGENT_TEAMS.md` | Claude Code Agent Teams 启用边界、teammate 分工、文件冲突规则 |
 | `REVIEW_GATE.md` | QA / Safety / Doc review gate |
 | `CHECKLISTS.md` | 数据、策略、回测、文档检查清单 |
 | `FAILURE_RECOVERY.md` | 失败回流和恢复规则 |
@@ -45,6 +46,9 @@
 ## 3. .claude/
 
 ### .claude/agents/
+
+这些定义既可作为 Claude Code subagent 使用，也可在 Agent Teams 中按名称作为 teammate 角色使用。Agent Teams 启用时仍必须遵守 `docs/coordination/AGENT_TEAMS.md` 的 lead/teammate/file owner 规则。
+
 
 | Agent | 用途 |
 |---|---|

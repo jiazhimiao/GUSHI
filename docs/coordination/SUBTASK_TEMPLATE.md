@@ -3,10 +3,13 @@
 ```text
 Task title:
 Level:
-Owner agent:
+Execution mode: single-session / subagent / Agent Teams
+Owner agent / teammate:
 Goal:
 Allowed files:
 Forbidden files:
+File ownership:
+Read-only or edit allowed:
 Required reading:
 Steps:
 Validation commands:

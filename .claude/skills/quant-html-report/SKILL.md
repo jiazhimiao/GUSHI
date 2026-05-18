@@ -123,6 +123,22 @@ Not allowed unless explicitly requested:
 
 ---
 
+## Agent Teams coordination
+
+When this skill is used inside Claude Code Agent Teams, HTML report generation should normally be owned by one teammate only. Reviewer teammates may inspect the HTML against Markdown, CSV, JSON, logs, or raw report evidence, but should not edit the same HTML file concurrently.
+
+Rules:
+
+- The lead session owns final output approval and final task synthesis.
+- The report-generation teammate must state the intended HTML output path before editing.
+- Only one teammate may edit a given HTML file or report template at a time.
+- Reviewer teammates are read-only by default and should report evidence mismatches, missing data, overstated conclusions, or Markdown canonical-state conflicts.
+- If Python report-generation scripts are modified, `quant-code-quality-gate` must also apply to the code portion.
+- Do not let optional HTML work override canonical Markdown project memory.
+- If an HTML report conclusion conflicts with Markdown/CSV/JSON evidence, stop and report the conflict instead of polishing the HTML wording.
+
+Agent Teams does not change this skill's core rule: HTML is an optional presentation layer, while Markdown remains canonical project memory unless the user explicitly requests HTML-first documentation.
+
 ## Canonical Markdown compatibility
 
 When doing HTML report work:

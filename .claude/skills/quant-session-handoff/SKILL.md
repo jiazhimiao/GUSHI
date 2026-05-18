@@ -10,6 +10,7 @@ Use this skill before context reset or after a major task.
 - `FILE_INVENTORY.md`: new/removed/renamed important files.
 - `docs/coordination/TASK_GRAPH.md`: task state.
 - `docs/coordination/AGENT_AUDIT_LOG.md`: L2/L3 agent audit entry.
+- `docs/coordination/AGENT_TEAMS.md`: only if Agent Teams rules changed.
 
 ## Handoff prompt
 
@@ -22,6 +23,8 @@ current phase
 current only task
 frozen directions
 forbidden actions
+whether Agent Teams was used
+active teammate findings, if any
 ```
 
 Never include token or .env content.

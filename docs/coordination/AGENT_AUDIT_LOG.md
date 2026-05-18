@@ -8,7 +8,9 @@
 Date:
 Task:
 Level:
-Agents:
+Execution mode:
+Agents / teammates:
+File ownership:
 Files changed:
 Commands run:
 Validation:

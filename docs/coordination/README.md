@@ -8,6 +8,7 @@
 PROJECT_INDEX.md              项目入口索引
 TASK_LEVELS.md                L0-L3 任务等级
 MULTI_AGENT_ORCHESTRATION.md  多 Agent 路由
+AGENT_TEAMS.md                Claude Code Agent Teams 使用规则
 REVIEW_GATE.md                审查门槛
 TASK_GRAPH.md                 当前任务图
 AGENT_AUDIT_LOG.md            Agent 审计日志
@@ -15,3 +16,5 @@ SESSION_HANDOFF.md            会话交接模板
 ```
 
 当前项目状态仍以根目录 `HANDOFF.md` / `TASK.md` / `EXECUTION.md` 为准。
+
+Agent Teams 是可选执行模式。未明确启用时，按 subagent 或主 Agent checklist 执行；启用后必须先读 `AGENT_TEAMS.md`。

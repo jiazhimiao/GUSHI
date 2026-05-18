@@ -113,6 +113,28 @@ If unrelated changes exist, keep the current task narrow and do not stage them.
 
 ---
 
+## Agent Teams coordination
+
+When this skill is used inside Claude Code Agent Teams, the lead session remains responsible for final scope control and write approval. Teammates may investigate independently, but code changes must still follow this skill's small-patch, validation, diff-review, and stop-on-risk workflow.
+
+Rules:
+
+- The lead session owns final write approval and final task synthesis.
+- Each teammate must state its intended file scope before editing.
+- Only one teammate may edit a given file at a time.
+- Reviewer teammates such as `qts-qa-reviewer` and `qts-safety-reviewer` are read-only by default.
+- If a teammate discovers that another teammate is editing the same file, stop and notify the lead.
+- If a teammate's task expands beyond its assigned role, stop and ask the lead to re-scope.
+- Code-changing teammates must report:
+  1. files changed;
+  2. validation run;
+  3. diff risk;
+  4. reliability label;
+  5. whether another review is needed.
+- The lead must synthesize teammate outputs before finalizing the task.
+
+Agent Teams does not weaken any boundary in this skill. If Agent Teams coordination conflicts with code quality, data safety, token safety, or git hygiene, the stricter rule wins.
+
 ## Small-patch rule
 
 Do not make broad mixed changes.

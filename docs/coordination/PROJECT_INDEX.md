@@ -36,3 +36,5 @@ data/meta/industry_classification.csv
 ## 当前可用 Agent
 
 见 `.claude/agents/` 和 `AGENT_REGISTRY.md`。
+
+如启用 Claude Code Agent Teams，先读取 `AGENT_TEAMS.md`，再按 qts-* 角色创建 teammates。

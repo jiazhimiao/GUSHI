@@ -9,4 +9,12 @@
 
 当前 B1 Industry Rotation 属于 L2。
 
+## Agent Teams 建议
+
+```text
+L0/L1：默认不用 Agent Teams
+L2：可在数据审计、策略诊断、QA review 需要并行时启用
+L3：仅在用户明确确认后启用，并必须包含 qts-safety-reviewer
+```
+
 L2/L3 任务完成后必须停止，等待用户确认。

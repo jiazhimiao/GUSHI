@@ -51,8 +51,8 @@ Industry Classification Solved → Ready for B1 Industry Rotation Offline Evalua
 | `TASK.md` | 当前唯一任务、验收标准、禁止事项 |
 | `EXECUTION.md` | 最近执行记录和验证结果 |
 | `FILE_INVENTORY.md` | 文件结构和重要文件用途 |
-| `docs/coordination/` | 多 Agent 编排、审计、Review Gate |
-| `.claude/agents/` | Claude Code subagents 定义 |
+| `docs/coordination/` | 多 Agent / Agent Teams 编排、审计、Review Gate |
+| `.claude/agents/` | Claude Code subagents 定义，也可作为 Agent Teams teammate 角色 |
 | `.claude/skills/` | 可复用工作流 skill |
 | `reports/` | 研究报告和历史证据 |
 
@@ -154,4 +154,4 @@ python scripts/incremental_update_data.py --provider tushare --verify-only
 - 研究失败必须保留报告，不得隐藏
 - 新增重要文件时同步 `FILE_INVENTORY.md`
 
-多 Agent 工作流见：`docs/coordination/README.md`。
+多 Agent 工作流见：`docs/coordination/README.md`。启用 Claude Code Agent Teams 时，先读 `docs/coordination/AGENT_TEAMS.md`，并按项目角色创建 teammates。
