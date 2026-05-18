@@ -100,11 +100,27 @@ EW-only does not pass independently, but EW signal + AW holding is viable for co
 
 ---
 
+## 2026-05-19：B1-Redefined QA Review
+
+- 独立审查三补充诊断 + 重定义提案。
+- 结论：**CONDITIONAL PASS / REDEFINED — ACCEPTED**。
+- 新名称：EW+AWH Industry Momentum (highly concentrated)。
+- 关键发现：
+  1. Static hold block removed — rotation 4/4 > ex-ante static hold
+  2. EA > AA in 4/5 splits — EW signal + AW holding is synergistic
+  3. EW-only 0/24 pass Ex-2025 RC — proves complementarity, not weakness
+  4. Top3 concentration 80%+ — core structural risk, must bound
+- 允许：Robustness Validation（concentration bounding only）
+- 禁止：formal backtest / Paper Trading / GA / strategy code changes
+- 报告：`reports/b1_redefined_qa_review_20260519.md`
+
+---
+
 ## 当前未完成
 
 ```text
-B1-REDEFINED — EW+AWH Industry Momentum（CONDITIONAL PASS）
-下一步：QA review 新定义 + AW 集中度风险评估
+B1-REDEFINED — EW+AWH Industry Momentum (highly concentrated) — CONDITIONAL PASS
+下一步：Robustness Validation 1 — bound AW holding concentration risk
 ```
 
 禁止直接进入回测、GA、Paper Trading。

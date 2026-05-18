@@ -12,11 +12,11 @@ trend_breakout v2：PAUSED
 Candidate B：historical baseline only
 Tushare provider：optional provider 已接入，默认仍 AKShare
 Industry classification：已解决，280/280 HS300 覆盖
-B1 Industry Rotation：CONDITIONAL PASS / REDEFINED（2026-05-19 三补充诊断闭环）
-新名称：EW Signal + AW Holding Amount-Weighted Industry Momentum
+B1：CONDITIONAL PASS / REDEFINED — ACCEPTED（2026-05-19 QA 审查通过）
+新名称：EW+AWH Industry Momentum (highly concentrated)
 标准配置：LB60-120, Top3-5, MinStk3, EW signal + AW holding
-不进入 Paper Trading，不进入正式回测
-下一步：B1-redefined QA review + AW 集中度风险评估
+明确禁止：formal backtest / Paper Trading / GA / strategy code changes
+下一步：Robustness Validation — bound AW holding concentration risk
 ```
 
 当前工作区注意事项：

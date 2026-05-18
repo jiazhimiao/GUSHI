@@ -2,12 +2,14 @@
 
 ## B1-REDEFINED — EW Signal + AW Holding Amount-Weighted Industry Momentum
 
-> **状态更新 2026-05-19**: 三补充诊断闭环。OBSERVE → CONDITIONAL PASS / REDEFINED。
-> 原 "Industry Rotation" 命名暂停，新名称：**EW+AWH Industry Momentum**。
+> **状态更新 2026-05-19**: QA Review ACCEPTED。CONDITIONAL PASS / REDEFINED。
+> 新名称：**EW+AWH Industry Momentum (highly concentrated)**。
+> 允许进入 robustness validation，禁止 formal backtest / Paper Trading / GA。
 
 ### 目标
 
 验证 EW signal + AW holding 组合是否能产生稳定超额收益（原行业轮动目标已修订）。
+当前阶段：Robustness Validation — AW holding concentration risk bounding。
 
 ---
 
@@ -180,19 +182,39 @@ reports/industry_rotation_offline_eval_YYYYMMDD.md
 
 ---
 
-## 9. B1-Redefined 下一步
+## 9. Robustness Validation 1 — AW Holding Concentration Risk Bounding
+
+> 2026-05-19 QA Review: ACCEPTED。允许进入 robustness validation。
+
+### 目标
+
+量化并约束 AW holding 中 top 股票集中度风险，验证 EA 在受限权重下是否仍有效。
+
+### 验证项
 
 ```text
-A. QA review：新定义 "EW+AWH Industry Momentum" 是否成立
-B. AW holding top-stock concentration 风险量化
-   - top-3 股票占 AW 行业 80%+ 成交额
-   - 回报贡献 84%+ 来自 top-3
-C. 设计更保守的 EA 标准配置
-   - 行业中个股数下限
-   - top-1 权重硬上限
-   - 是否需要行业分散度约束
+1. 单股权重 cap 影响
+   - cap = None (current baseline)
+   - cap = 20%
+   - cap = 15%
+   - cap = 10%
+   对 EA Ex-2025 Rel.Calmar 和 Ann.Excess 的影响
 
-不进入 Paper Trading
+2. Top3 concentration 控制
+   - 是否能在保持 EA 优于 EE 的前提下，将 top3 集中度降至 60% 以下
+   - 需要多少只股票/行业才能实现分散
+
+3. Bounded AW vs EW holding
+   - 在受限权重下，AW holding 是否仍显著优于 EW holding
+   - 如果受限 AW 与 EW 无差异，则 AW holding 的价值来自集中而非加权
+```
+
+### 禁止事项
+
+```text
 不进入正式回测
+不进入 Paper Trading
 不跑 GA
+不改 data/raw
+不改策略代码
 ```
