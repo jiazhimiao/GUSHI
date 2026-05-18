@@ -71,11 +71,40 @@ c7102d4 data: add industry classification map (280/280 HS300, 65 labels)
 
 ---
 
+## 2026-05-19：B1 三补充诊断完成
+
+### Static Hold Ex-Ante
+- Rotation 4/4 splits 优于 ex-ante static hold。
+- 2022-2023 训练期最强行业在 2024-2025 全部失效，rotation 动态适应。
+- 脚本：`diagnose_b1_static_hold.py`，报告：`b1_static_hold_diagnostic_20260518.md`
+
+### AW/EW 2×2 Decomposition
+- Holding weight effect 主导（87-97%），signal effect 仅 3-13%。
+- EA (EW signal + AW holding) > AA in 4/5 splits（Rel.Calmar）。
+- Top-3 stocks account for 80%+ of AW industry amount。
+- 脚本：`diagnose_b1_aw_ew_decomposition.py`，报告：`b1_aw_ew_decomposition_20260518.md`
+
+### EW-Only Stability
+- 24 variants × 5 splits 网格扫描。
+- 0/24 pass Ex-2025 Rel.Calmar >= 0.5（best: LB120_Top5_MinStk5=0.44）。
+- EW-alone insufficient；must pair with AW holding。
+- 脚本：`diagnose_b1_ew_only.py`，报告：`b1_ew_only_diagnostic_20260518.md`
+
+### 阶段性判断
+
+```text
+B1 REDEFINED: EW Signal + AW Holding Amount-Weighted Industry Momentum
+Status: OBSERVE → CONDITIONAL PASS
+EW-only does not pass independently, but EW signal + AW holding is viable for continued research.
+```
+
+---
+
 ## 当前未完成
 
 ```text
-B1 Industry Rotation — OBSERVE（QA REQUEST_CHANGES）
-B1 补充诊断（static hold 事前对比 + AW/EW 差距分解 + EW-only）
+B1-REDEFINED — EW+AWH Industry Momentum（CONDITIONAL PASS）
+下一步：QA review 新定义 + AW 集中度风险评估
 ```
 
 禁止直接进入回测、GA、Paper Trading。

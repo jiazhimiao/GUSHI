@@ -1,12 +1,13 @@
 # TASK — 当前唯一任务
 
-## B1 — Industry Rotation Offline Evaluation
+## B1-REDEFINED — EW Signal + AW Holding Amount-Weighted Industry Momentum
 
-> **状态更新 2026-05-18**: QA Review → REQUEST_CHANGES。CONDITIONAL PASS 降级为 OBSERVE。需要补充诊断。
+> **状态更新 2026-05-19**: 三补充诊断闭环。OBSERVE → CONDITIONAL PASS / REDEFINED。
+> 原 "Industry Rotation" 命名暂停，新名称：**EW+AWH Industry Momentum**。
 
 ### 目标
 
-验证行业级别月频轮动是否能在 HS300 股票池上产生稳定超额收益。
+验证 EW signal + AW holding 组合是否能产生稳定超额收益（原行业轮动目标已修订）。
 
 ---
 
@@ -145,50 +146,53 @@ reports/industry_rotation_offline_eval_YYYYMMDD.md
 
 ---
 
-## 8. B1 补充诊断（QA REQUEST_CHANGES 后）
+## 8. 补充诊断完成（2026-05-19 三诊断闭环）
 
-> 2026-05-18 QA 审查结论： CONDITIONAL PASS → OBSERVE。需要补充以下诊断才能重新评估。
+### 8.1 Static Hold Ex-Ante ✅
+- Rotation 4/4 splits 优于 ex-ante static hold
+- Static hold 不再阻塞 B1
+- 脚本：`scripts/diagnose_b1_static_hold.py`
+- 报告：`reports/b1_static_hold_diagnostic_20260518.md`
 
-### 8.1 Static Hold 事前对比
+### 8.2 AW/EW 2×2 Decomposition ✅
+- AW/EW gap 87-97% 来自 holding weight effect
+- EA (EW signal + AW holding) > AA in 4/5 splits
+- EW signal 是更好的行业选择器，AW holding 是必要放大器
+- 脚本：`scripts/diagnose_b1_aw_ew_decomposition.py`
+- 报告：`reports/b1_aw_ew_decomposition_20260518.md`
+
+### 8.3 EW-Only Stability ✅
+- 0/24 variants pass Ex-2025 Rel.Calmar >= 0.5
+- EW signal alone insufficient → must pair with AW holding
+- LB60-120 + Top3-5 + MinStk3 is the viable region
+- 脚本：`scripts/diagnose_b1_ew_only.py`
+- 报告：`reports/b1_ew_only_diagnostic_20260518.md`
+
+### 8.4 综合判定
 
 ```text
-问题：诊断报告 Section 8 显示通信设备 static hold（328%）碾压 rotation（~57%）
-      但这是事后视角 — 当时无法知道通信设备会是 2024-2025 最强行业
-要求：
-  - 月末仅用当时已知数据选择"最优 static hold 行业"（高动量行业）
-  - 对比 rotation top-3/top-5 vs 持有单一最佳行业
-  - 如果 rotation 在事前视角下仍然跑输 static hold，则 rotation 不增加价值
+✅ Rotation > static hold (ex-ante)
+✅ EA > AA (EW signal + AW holding 最优)
+❌ EW-only 不独立通过 Ex-2025 Calmar gate
+→ B1 REDEFINED as EW Signal + AW Holding
+→ CONDITIONAL PASS，不封存
 ```
 
-### 8.2 AW/EW 差距分解
+---
+
+## 9. B1-Redefined 下一步
 
 ```text
-问题：AW 超额是 EW 的 2-3x，未解释
-      银行（23 只）+ 证券（22 只）在 AW 中权重远高于 EW
-要求：
-  - 分解 AW 超额中的行业选择贡献 vs 大市值 beta 贡献
-  - 对比 AW rotation vs HS300 官方指数（市值加权）
-  - 如果 AW 超额主要来自大市值行业集中，则不属于轮动 alpha
-```
+A. QA review：新定义 "EW+AWH Industry Momentum" 是否成立
+B. AW holding top-stock concentration 风险量化
+   - top-3 股票占 AW 行业 80%+ 成交额
+   - 回报贡献 84%+ 来自 top-3
+C. 设计更保守的 EA 标准配置
+   - 行业中个股数下限
+   - top-1 权重硬上限
+   - 是否需要行业分散度约束
 
-### 8.3 EW-only 诊断
-
-```text
-问题：EW 变体 Ex-2025 几乎全部失败（4/6 超额 < 3.05%）
-      B1 前提是"行业级别收益序列信噪比 > 个股级别"
-      如果 EW（最纯粹的行业 beta）不行，前提动摇
-要求：
-  - EW 变体 Ex-2025 是否在统计上显著 > 0
-  - EW 是否在任一单一 regime 中可靠
-  - 如果仅 AW 可行，B1 的"行业轮动"标签应改为"大市值行业动量"
-```
-
-### 8.4 封存条件
-
-```text
-如果以上三项诊断无法证明：
-  1. rotation 在事前视角下优于 static hold
-  2. EW 在 Ex-2025 有独立 alpha
-  3. AW 超额不是单纯的大市值 beta
-则封存 B1，写入 HANDOFF.md，不接回测。
+不进入 Paper Trading
+不进入正式回测
+不跑 GA
 ```
