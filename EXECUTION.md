@@ -1,61 +1,66 @@
-# EXECUTION — 2026-05-18 (RESEARCH CYCLE END)
+# EXECUTION — 2026-05-18 (FINAL)
 
-## Completed: Full Alpha Research Cycle (6 directions)
+## Completed This Session
 
-### Code Changes (this session, uncommitted)
+### 1. Cross-Sectional Alpha Evaluation
+- Phase 1: 13 features IC scan on HS300 (momentum)
+- Reversal/Defensive audit: 11 reversed features
+- Verdict: MARGINAL (momentum) / STOP (reversal)
+- Script: `scripts/evaluate_cross_sectional_alpha.py`
 
-**New scripts (3)**:
-- `scripts/evaluate_cross_sectional_alpha.py` — single-factor IC scanner (momentum + reversal modes)
-- `scripts/diagnose_pair_universe.py` — A0 pair universe + mean reversion diagnostics
-- `scripts/diagnose_pair_walkforward.py` — A0.5 walk-forward + non-overlap trade simulation
+### 2. Pair Trading (A0 + A0.5)
+- A0: correlation-based pair universe, 254 pairs, 59.4% reversion
+- A0.5: walk-forward + non-overlap + T+1 open + trade filters
+- 5394 trades, mean excess +0.21%, after-cost -0.09%
+- 2025-2026 completely fails
+- Verdict: FAIL
+- Scripts: `diagnose_pair_universe.py`, `diagnose_pair_walkforward.py`
 
-**Updated docs (3)**:
-- `HANDOFF.md` — full research cycle summary
-- `TASK.md` — task completion record
-- `EXECUTION.md` — this file
+### 3. Event-Driven Audit (C0)
+- `historical_constituents.json` insufficient for event research
+- Verdict: WAIT (data)
+- Report: `index_membership_event_audit_20260518.md`
 
-### Reports Generated (10 substantive + 6 smoke/debug)
+### 4. Industry Classification Data Source Audit
+- Tested 4 sources: Tushare/jiaoch.site, AKShare CSRC, Shenwan, Eastmoney
+- Tushare stock_basic: 5515 A-shares, 280/280 HS300 (100%), 65 labels, 39 effective
+- Verdict: A (available)
+- Script: `verify_industry_classification_source.py`
 
-**Substantive reports (commit-eligible)**:
-| # | Report | Phase | Verdict |
-|---|--------|-------|---------|
-| 1 | `project_status_20260517.md` | Status | — |
-| 2 | `cross_sectional_alpha_plan_20260517.md` | Plan | — |
-| 3 | `cross_sectional_alpha_report_20260517_235638.md` | Phase 1 | MARGINAL |
-| 4 | `reversal_defensive_factor_audit_20260518_001139.md` | Reversal | STOP |
-| 5 | `index_membership_event_audit_20260518.md` | C0 | WAIT |
-| 6 | `next_structure_research_plan_20260518.md` | 3-dir plan | — |
-| 7 | `pair_universe_feasibility_audit_20260518.md` | A0 | MARGINAL |
-| 8 | `pair_walkforward_feasibility_recheck_20260518.md` | A0.5 | FAIL |
-| 9 | `industry_rotation_data_audit_plan_20260518.md` | B0 plan | — |
-| 10 | `industry_rotation_data_audit_20260518.md` | B0 audit | WAIT |
+### 5. Industry Classification Data Asset Built
+- `data/meta/industry_classification.csv` — committed project asset
+- 5515 rows, 640 KB, 280/280 HS300 coverage
+- Script: `build_industry_classification_map.py`
+- Report: `industry_classification_map_report_20260518.md`
 
-**Smoke/debug reports (do NOT commit)**:
-- `cross_sectional_alpha_report_20260517_234821.md` (+csv)
-- `cross_sectional_alpha_report_20260517_234952.md` (+csv)
-- `cross_sectional_alpha_report_20260517_235301.md` (+csv)
-- `cross_sectional_alpha_report_20260517_235638.csv`
-- `reversal_defensive_factor_audit_20260518_001139.csv`
+### Files Modified (this session)
+```
+HANDOFF.md, TASK.md, EXECUTION.md — updated multiple times
+```
 
-### Data Files (do NOT commit)
-- `data/pair_industry_map.json` — partial industry map (A0)
-- `data/pair_diagnostics_top50.csv` — A0 pair diagnostics
-- `data/pair_walkforward_trades.csv` — 5394 trades (A0.5)
-- `data/pair_walkforward_periods.csv` — 14 periods (A0.5)
-- `data/industry_classification_full.json` — 106 classified + 174 unknown
-- `data/industry_classification_shenwan.json` — Shenwan attempt (failed)
+### Files Created (committed)
+```
+data/meta/industry_classification.csv
+scripts/evaluate_cross_sectional_alpha.py
+scripts/diagnose_pair_universe.py
+scripts/diagnose_pair_walkforward.py
+scripts/verify_industry_classification_source.py
+scripts/build_industry_classification_map.py
+reports/ (10 substantive + report_catalog)
+```
 
-### Bugs Found & Fixed
-1. LOOKBACK_START too short for 60d features → changed to 2018-01-01
-2. HS300 data only from 2022-01-04 for most constituents → min_history reduced 120→60
-3. DatetimeArray.sort() → removed
-4. mask_initial() returning NoneType → simplified exclusion counting
-5. ic_results[fname] not stored → added storage line
-6. Pair walk-forward: positional vs label-based indexing → switched to label-based
-7. SH stock industry API rate-limited → documented limitation
+### Git Commits (this session)
+```
+74f679f research: archive cross-sectional and structure feasibility studies
+c7102d4 data: add industry classification map (280/280 HS300, 65 labels)
+```
 
 ### Not Modified
-broker, engine, data pipeline, GA optimizer, all strategy code, Parquet data files
+broker, engine, data pipeline, GA optimizer, all strategy code
 
-### Next
-Await commit confirmation. Next research cycle starts from data infrastructure upgrade.
+### Key Data Limitation Resolved
+Industry classification went from 37.9% (AKShare CSRC, SZ only) → 100% (Tushare/jiaoch.site, all HS300).
+This unblocks B (Industry Rotation) and enables same-industry filtering for A (Pair Trading).
+
+### .env / Token Security
+`.env` created with TUSHARE_TOKEN, confirmed in `.gitignore`. Never committed.
