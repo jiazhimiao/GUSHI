@@ -133,7 +133,7 @@ run_entry_experiment.py
 evaluate_cross_sectional_alpha.py
 diagnose_pair_universe.py
 diagnose_pair_walkforward.py
-# B1 若新增 evaluate_industry_rotation.py，需要同步本文件
+evaluate_industry_rotation.py
 ```
 
 ---
