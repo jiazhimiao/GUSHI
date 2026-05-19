@@ -97,7 +97,55 @@ Lead 不直接覆盖 teammate 输出，必须先综合差异。
 
 ---
 
-## 6. 结论格式
+## 6. 禁止 Inline 模拟 + 按任务动态路由
+
+当用户要求 "按 Agent Teams 规则执行" 时，**禁止**以下行为：
+
+```text
+❌ 主 session 自己依次扮演 qts-qa-reviewer、qts-safety-reviewer、qts-strategy-dev
+❌ 在单线程中写完 QA 审查、Safety 审查、策略分析后声称 "已使用 Agent Teams"
+❌ 用 checklist 模拟替代实际 spawn 独立 teammate
+```
+
+### 6.1 必须做
+
+```text
+✅ Agent(subagent_type="qts-*", ...) spawn 独立 teammate
+✅ 或 TeamCreate + Agent(team_name=..., ...) 创建 named teammate
+✅ L2/L3 任务默认至少 spawn 2 个独立 teammate；复杂任务可 3-4 个
+✅ 每个 teammate 读取自己的文件、输出自己的结论
+✅ Lead 汇总各 teammate 结果后统一输出
+```
+
+### 6.2 按任务类型动态路由
+
+| 任务类型 | 默认 teammate | 何时加 reviewer |
+|---|---|---|
+| 研究/策略信号 | qts-strategy-dev + qts-qa-reviewer | 涉及交易升级时加 qts-safety-reviewer |
+| 数据/schema/复权/成分股 | qts-data-dev + qts-qa-reviewer | 涉及外部数据源/token/网络拉取时加 qts-safety-reviewer |
+| 回测/指标/评估脚本 | qts-backtest-dev + qts-qa-reviewer | 涉及交易结论时加 qts-safety-reviewer |
+| 风控/执行/交易接口 | qts-risk-execution-dev + qts-safety-reviewer + qts-qa-reviewer | 默认含 safety |
+| 文档/交接/项目状态 | qts-doc-auditor + qts-main-orchestrator | 通常不需要 safety |
+| 大型阶段任务 | qts-main-orchestrator (lead) + 2-4 specialists | 按子任务类型选择 |
+
+qts-qa-reviewer 和 qts-safety-reviewer 默认只读。Lead 负责最终写入和汇总。
+
+### 6.3 工具不可用时
+
+如果 Agent 工具不可用，必须显式声明：
+
+```text
+⚠️ Agent Teams unavailable in this environment.
+Fallback to single-session checklist.
+  以下角色仅为 checklist 模拟，不是独立 teammate：
+  - qts-qa-reviewer: [simulated by lead]
+  - qts-safety-reviewer: [simulated by lead]
+  - (按实际任务列出所有模拟角色)
+```
+
+---
+
+## 7. 结论格式
 
 Agent Teams 任务结束时，lead 必须输出：
 

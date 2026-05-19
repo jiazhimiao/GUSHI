@@ -128,6 +128,54 @@ Reviewer 默认只读
 
 禁止把 Agent Teams 当作自动升级机制。指标 PASS 不等于策略可交易，也不等于可进入 Paper Trading。
 
+### Agent Teams 强制执行规则
+
+当用户明确说 "按 Agent Teams 规则执行" 或任务为 L2/L3 且需要多角色审查时：
+
+```text
+1. 必须实际 spawn 独立 teammate：
+     - TeamCreate + Agent(team_name=..., subagent_type="qts-*")，或
+     - Agent(subagent_type="qts-*") 直接 spawn 子 agent
+
+2. 禁止只在主 session 内 inline 模拟 qts-* 角色后声称已使用 Agent Teams。
+
+3. L2/L3 任务默认至少 spawn 2 个独立 teammate；复杂任务可 spawn 3-4 个。
+
+4. 按任务类型动态选择 agent：
+
+   研究/策略信号：
+     qts-strategy-dev + qts-qa-reviewer
+     涉及交易升级时加 qts-safety-reviewer
+
+   数据/schema/复权/成分股：
+     qts-data-dev + qts-qa-reviewer
+     涉及外部数据源/token/网络拉取时加 qts-safety-reviewer
+
+   回测/指标/评估脚本：
+     qts-backtest-dev + qts-qa-reviewer
+     涉及交易结论时加 qts-safety-reviewer
+
+   风控/执行/交易接口：
+     qts-risk-execution-dev + qts-safety-reviewer + qts-qa-reviewer
+
+   文档/交接/项目状态：
+     qts-doc-auditor + qts-main-orchestrator
+     通常不需要 safety，除非文档会改变交易升级状态
+
+   大型阶段任务：
+     qts-main-orchestrator 作为 lead
+     再按任务选择 2-4 个 specialist
+
+5. qts-qa-reviewer 和 qts-safety-reviewer 默认只读。
+
+6. qts-main-orchestrator / lead 负责最终写入和汇总。
+
+7. 如果 Agent 工具不可用，必须显式说明：
+     - Agent Teams unavailable in this environment
+     - Fallback to single-session checklist
+     - 列明哪些角色只是 checklist 模拟，不是独立 teammate
+```
+
 ---
 
 ## 6. Git 规则
