@@ -161,7 +161,35 @@ EW-only does not pass independently, but EW signal + AW holding is viable for co
 ```text
 B1 — OBSERVE / FRAGILE（closeout complete）
 B2 — PAUSE / MARGINAL-FAIL（closeout complete）
-下一步：暂停行业层路线，转向个股层/行业内结构化信号 OR 全新方向
+C1 — FAIL（closeout complete，C1-B/C1-C blocked）
+下一步：暂停行业层及行业内相对动量路线，回到 B1 baseline 稳健性/入场信号质量/非行业内动量方向
 ```
 
 禁止直接进入回测、GA、Paper Trading。
+
+---
+
+## 2026-05-19：C1 Industry-Inside Stock Selection + Closeout
+
+### Phase 1a: Variance Decomposition
+- Pre-check failed to compute（诊断性缺口，非阻塞）
+
+### C1-A Evaluation
+- Signal: stock_60d_mom - industry_ew_mom, Top-20/Top-10 EW
+- 4 configs tested (Ex-2025/2024 × Top20/Top10)
+- 0/4 pass all MUST gates
+- Ex-2025 Top20 S3: RC=0.00 (B1=0.63), IR=-1.25, WR=39%, DD=-36.6%, T10%=100%
+- Best config (2024 Top10 S3): RC=0.10, T10%=330%
+
+### QA + Safety Review
+- QA (ac56ebc): CONFIRM_FAIL — 假设被证伪，信号选出后续均值回归，非实现 bug
+- Safety (a98b752): SAFE — 零违规，L2 边界完整
+
+### 结论
+- **C1-A: FAIL — hypothesis falsified.**
+- 行业内相对动量选出过去跑赢同行的股票，这些股票下个月均值回归（alpha 方向为负）
+- C1-B/C1-C blocked（C1-A 未通过全部 MUST gate）
+- 脚本：`scripts/evaluate_c1_industry_inside_stock_selection.py`
+- 报告：`reports/c1_industry_inside_stock_selection_20260519.md`
+- 研究计划：`reports/c1_research_plan_20260519.md`
+

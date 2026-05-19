@@ -15,8 +15,11 @@ Industry classification：已解决，280/280 HS300 覆盖
 B1：OBSERVE / FRAGILE — EW+AWH-IM (research observation only)
 B2：PAUSE / MARGINAL-FAIL（2026-05-19 B2 Phase 1 closeout）
   行业层多因子排序没有解决信号薄、时间集中、小行业依赖问题
+C1：FAIL（2026-05-19 C1-A closeout）
+  行业内相对动量选股假设被证伪，0/4 配置通过，alpha 方向为负（均值回归）
+  C1-B/C1-C blocked
 明确禁止：formal backtest / Paper Trading / GA / strategy code changes
-下一步：暂停行业层路线，转向个股层/行业内结构化信号 OR 全新方向
+下一步：暂停行业内相对动量路线，回到 B1 baseline 稳健性/入场信号质量或其他非行业内动量方向
 ```
 
 当前工作区注意事项：
@@ -40,6 +43,7 @@ handoff/ 是本地备份目录，不提交
 | Pair long-only reversion | A0.5 walk-forward | FAIL | 2025-2026 失效，after-cost excess 转负 |
 | Industry Rotation | B1 eval → 3 supplements → RV | **OBSERVE / FRAGILE** | EW+AWH-IM. Cap_20 fragile, top-3-month concentrated |
 | Industry Multi-Factor (B2) | Phase 1 | **PAUSE / MARGINAL-FAIL** | B2-C RC>B1 but T10%=99%, MinStk5=0 pass. Signal too thin. |
+| Industry-Inside Stock (C1) | C1-A Phase 1 | **FAIL** | Within-industry relative momentum falsified. 0/4 pass, negative alpha (mean-reversion). |
 
 ---
 
@@ -106,9 +110,10 @@ source：Tushare / jiaoch.site stock_basic
 
 ## 7. 下一步建议
 
-1. B1-redefined QA review：新定义是否成立
-2. AW holding 集中度风险量化
-3. 设计更保守的 EA 标准配置
+1. B1 baseline 稳健性再审查
+2. Turnover 诊断 — B1/C1 换手率均 >50%，成本拖累是否可降低
+3. 入场信号质量 — 月末 snapshot 信号是否过于粗糙
+4. 转向非行业内相对动量方向（不以行业 membership 做 de-meaning）
 
 原则：
 
