@@ -12,11 +12,11 @@ trend_breakout v2：PAUSED
 Candidate B：historical baseline only
 Tushare provider：optional provider 已接入，默认仍 AKShare
 Industry classification：已解决，280/280 HS300 覆盖
-B1：CONDITIONAL PASS / REDEFINED — ACCEPTED（2026-05-19 QA 审查通过）
-新名称：EW+AWH Industry Momentum (highly concentrated)
-标准配置：LB60-120, Top3-5, MinStk3, EW signal + AW holding
+B1：OBSERVE / FRAGILE — EW+AWH-IM (research observation only)
+B2：PAUSE / MARGINAL-FAIL（2026-05-19 B2 Phase 1 closeout）
+  行业层多因子排序没有解决信号薄、时间集中、小行业依赖问题
 明确禁止：formal backtest / Paper Trading / GA / strategy code changes
-下一步：Robustness Validation — bound AW holding concentration risk
+下一步：暂停行业层路线，转向个股层/行业内结构化信号 OR 全新方向
 ```
 
 当前工作区注意事项：
@@ -38,7 +38,8 @@ handoff/ 是本地备份目录，不提交
 | 反转/防御横截面 | Audit | STOP | 无因子通过全部条件 |
 | Event-driven | C0 | WAIT | 成分股事件数据无公告日/生效日/调出 |
 | Pair long-only reversion | A0.5 walk-forward | FAIL | 2025-2026 失效，after-cost excess 转负 |
-| Industry Rotation | B1 eval → 3 supplements | **CONDITIONAL PASS / REDEFINED** | EW+AWH. Rotation>static hold, EA>AA, EW-alone insufficient |
+| Industry Rotation | B1 eval → 3 supplements → RV | **OBSERVE / FRAGILE** | EW+AWH-IM. Cap_20 fragile, top-3-month concentrated |
+| Industry Multi-Factor (B2) | Phase 1 | **PAUSE / MARGINAL-FAIL** | B2-C RC>B1 but T10%=99%, MinStk5=0 pass. Signal too thin. |
 
 ---
 

@@ -134,6 +134,12 @@ evaluate_cross_sectional_alpha.py
 diagnose_pair_universe.py
 diagnose_pair_walkforward.py
 evaluate_industry_rotation.py
+diagnose_b1_static_hold.py
+diagnose_b1_aw_ew_decomposition.py
+diagnose_b1_ew_only.py
+diagnose_b1_concentration_cap.py
+diagnose_b1_cap_time_variation.py
+evaluate_b2_multifactor.py
 ```
 
 ---
@@ -172,7 +178,11 @@ reversal / defensive factors
 event-driven membership audit
 pair feasibility
 industry classification
-industry rotation
+industry rotation (B1 eval, diagnostic, QA)
+B1 supplemental diagnostics (static hold, AW/EW, EW-only)
+B1 robustness validation (concentration cap, time variation)
+B1-redefined QA + final summary
+B2 multi-factor (research plan, Phase 1 eval)
 project status
 ```
 

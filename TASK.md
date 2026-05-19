@@ -1,15 +1,16 @@
 # TASK — 当前唯一任务
 
-## B1-REDEFINED — EW Signal + AW Holding Amount-Weighted Industry Momentum
+## B1 / B2 — Closeout
 
-> **状态更新 2026-05-19**: QA Review ACCEPTED。CONDITIONAL PASS / REDEFINED。
-> 新名称：**EW+AWH Industry Momentum (highly concentrated)**。
-> 允许进入 robustness validation，禁止 formal backtest / Paper Trading / GA。
+> **状态更新 2026-05-19**: B1→OBSERVE/FRAGILE, B2→PAUSE/MARGINAL-FAIL。
+> 行业层路线（momentum / multi-factor ranking）未解决信号薄、时间集中、小行业依赖。
+> 暂停行业层方向。不进入回测或 Paper Trading。
 
-### 目标
+### 当前状态
 
-验证 EW signal + AW holding 组合是否能产生稳定超额收益（原行业轮动目标已修订）。
-当前阶段：Robustness Validation — AW holding concentration risk bounding。
+B1 (Industry Rotation → EW+AWH-IM) 和 B2 (Multi-Factor Ranking) 两个行业层方向均已 closeout。
+结论：行业级别 alpha 存在但太薄，不足以支撑稳定的可交易策略。
+下一步：转向个股层/行业内结构化信号，或全新方向。
 
 ---
 
@@ -182,31 +183,60 @@ reports/industry_rotation_offline_eval_YYYYMMDD.md
 
 ---
 
-## 9. Robustness Validation 1 — AW Holding Concentration Risk Bounding
+## 9. B1 Final Summary
 
-> 2026-05-19 QA Review: ACCEPTED。允许进入 robustness validation。
+> 2026-05-19: robustness QA → OBSERVE/FRAGILE。B1 演化结束。
 
-### 目标
+## 10. B2 Closeout
 
-量化并约束 AW holding 中 top 股票集中度风险，验证 EA 在受限权重下是否仍有效。
+> 2026-05-19: B2 Phase 1 QA → PAUSE / MARGINAL-FAIL。
 
-### 验证项
+### 结果
+
+| 指标 | 值 |
+|---|---|
+| 最佳变体 | B2-C Top5 MinStk3 EW, RC=0.74 |
+| vs B1 baseline | WIN on RC (0.74 > 0.63) |
+| T10% 月份贡献 | 99% >> 80% gate |
+| MinStk=5 通过 | 0/6 variants |
+| MinStk=3 通过 | 1/6 variants |
+
+### 结论
+
+多因子排名没有解决行业层信号薄、时间集中、小行业依赖的核心问题。因子确实正交（max |r|=0.37），但 alpha 本身太弱，无法通过因子组合弥补。
+
+### 禁止事项
 
 ```text
-1. 单股权重 cap 影响
-   - cap = None (current baseline)
-   - cap = 20%
-   - cap = 15%
-   - cap = 10%
-   对 EA Ex-2025 Rel.Calmar 和 Ann.Excess 的影响
+不继续 B2 参数扩展
+不补 capped_aw 版本
+不跑 GA
+不进入 Paper Trading
+不进入正式回测
+```
 
-2. Top3 concentration 控制
-   - 是否能在保持 EA 优于 EE 的前提下，将 top3 集中度降至 60% 以下
-   - 需要多少只股票/行业才能实现分散
+### 下一步
 
-3. Bounded AW vs EW holding
-   - 在受限权重下，AW holding 是否仍显著优于 EW holding
-   - 如果受限 AW 与 EW 无差异，则 AW holding 的价值来自集中而非加权
+暂停行业层路线（B1+B2）。转向个股层/行业内结构化信号，或全新方向。
+
+### 保守标准配置（research observation only）
+
+```text
+Signal:     EW industry momentum, LB60
+Selection:  Top3 industries
+Holding:    capped AW, 20% single-stock limit
+MinStocks:  3 (load-bearing constraint)
+Additional: require >= 1 selected industry to have >= 8 stocks
+Cost:       20 bps/month
+Benchmark:  HS300 equal-weight
+Status:     RESEARCH OBSERVATION — NOT a trading strategy
+```
+
+### 后续选择
+
+```text
+Option A: 暂停 B1，转向新信号结构
+Option B: 保留该配置作为观察 benchmark，不主动开发
 ```
 
 ### 禁止事项
@@ -215,6 +245,7 @@ reports/industry_rotation_offline_eval_YYYYMMDD.md
 不进入正式回测
 不进入 Paper Trading
 不跑 GA
+不继续 robustness validation
 不改 data/raw
 不改策略代码
 ```

@@ -116,11 +116,52 @@ EW-only does not pass independently, but EW signal + AW holding is viable for co
 
 ---
 
+## 2026-05-19：B1 Robustness Validation + Final Summary
+
+### Robustness Validation 1 — Concentration Cap
+- cap_20: RC 0.63 (PASS), only LB60_Top3 survives
+- cap_15: RC 0.48 (FAIL)
+- RC drops 60% from uncapped; top3 concentration drops only 14%
+
+### Robustness Validation 2 — Time Variation + MinStocks
+- MinStk=5: RC 0.24 (FAIL, below EW holding)
+- MinStk=8: RC 0.66 but only 7 industries (not meaningful rotation)
+- Top 10% months = 113.6% of total excess — strategy concentrated in 3 months
+- Cap binds 100% of months
+
+### QA Review #3
+- **DOWNGRADE: CONDITIONAL PASS → OBSERVE/FRAGILE**
+- Reason: top-3-month concentration, single-parameter fragility, small-industry dependency
+- Stop expanding robustness validation
+
+### Final Summary
+- Conservative standard config designed (research observation only)
+- B1 evolution: Industry Rotation → EW+AWH-IM → OBSERVE/FRAGILE
+- Report: `reports/b1_redefined_final_summary_20260519.md`
+
+---
+
+---
+
+## 2026-05-19：B2 Multi-Factor Ranking Phase 1 + Closeout
+
+- 实现 3 个固定评分版本：B2-A/B/C
+- B2-C Top5 MinStk3 EW: RC=0.74 > B1 baseline (0.63)
+- 但 T10%=99%，MinStk=5 0/6 pass
+- Factor correlation max |r|=0.37 — factors orthogonal but alpha too thin
+- QA 修正：移除 capped_aw 重复行，修复 stop condition 文案歧义
+- **结论：PAUSE / MARGINAL-FAIL。行业层多因子不解决核心脆弱性。**
+- 脚本：`scripts/evaluate_b2_multifactor.py`
+- 报告：`reports/b2_multifactor_eval_20260519.md`
+
+---
+
 ## 当前未完成
 
 ```text
-B1-REDEFINED — EW+AWH Industry Momentum (highly concentrated) — CONDITIONAL PASS
-下一步：Robustness Validation 1 — bound AW holding concentration risk
+B1 — OBSERVE / FRAGILE（closeout complete）
+B2 — PAUSE / MARGINAL-FAIL（closeout complete）
+下一步：暂停行业层路线，转向个股层/行业内结构化信号 OR 全新方向
 ```
 
 禁止直接进入回测、GA、Paper Trading。
