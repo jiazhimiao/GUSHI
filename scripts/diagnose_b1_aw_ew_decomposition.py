@@ -40,7 +40,7 @@ IND_PATH = ROOT / "data/meta/industry_classification.csv"
 
 warnings.filterwarnings("ignore")
 
-COST_BPS_MONTHLY = 0.0020
+COST_BPS_MONTHLY = 0.0020  # 20 bps per traded side; applied proportionally to monthly turnover
 MIN_STOCKS = 3
 LOOKBACKS = [60, 20]
 TOP_NS = [3, 5]
@@ -244,7 +244,7 @@ def run_2x2_quadrant(signal_ret_dict, hold_ret_dict, eval_dates, lookback, top_n
                 ind_rets.append(r)
         if len(ind_rets) == 0:
             continue
-        portfolio_ret = np.mean(ind_rets) - COST_BPS_MONTHLY
+        portfolio_ret = np.mean(ind_rets)  # raw return, cost applied below
 
         ew_ret = np.nan
         if hs300_ew_cum is not None:
@@ -257,12 +257,18 @@ def run_2x2_quadrant(signal_ret_dict, hold_ret_dict, eval_dates, lookback, top_n
             if ew_s and ew_e and ew_s > 0:
                 ew_ret = ew_e / ew_s - 1
 
-        if np.isfinite(ew_ret):
-            monthly_excess.append(portfolio_ret - ew_ret)
-
+        # Proportional cost: 20bps * turnover_rate (per-trade, not flat monthly)
         if prev_selected is not None:
             n_changed = len(set(selected) - set(prev_selected))
-            turnovers.append(n_changed / len(selected))
+            turnover_rate = n_changed / len(selected)
+        else:
+            turnover_rate = 1.0  # first month: full position build
+        turnovers.append(turnover_rate)
+        cost = COST_BPS_MONTHLY * turnover_rate
+
+        if np.isfinite(ew_ret):
+            monthly_excess.append(portfolio_ret - cost - ew_ret)
+
         prev_selected = selected
         n_months += 1
         overlap_data.append({"date": me_date, "selected": selected})

@@ -28,7 +28,7 @@ IND_PATH = ROOT / "data/meta/industry_classification.csv"
 
 warnings.filterwarnings("ignore")
 
-COST_BPS = 0.0020
+COST_BPS = 0.0020  # 20 bps per traded side; applied proportionally to monthly turnover
 LOOKBACKS = [5, 20, 60, 120]
 TOP_NS = [3, 5, 8]
 MIN_STOCKS_LIST = [3, 5]
@@ -162,7 +162,7 @@ def run_rotation(ind_ret, eval_dates, all_dates, lookback, top_n, hs300_ew):
                 rets.append(cum - 1)
         if len(rets) == 0:
             continue
-        port_ret = np.mean(rets) - COST_BPS
+        port_ret = np.mean(rets)  # raw return, cost applied below
 
         ew_ret = np.nan
         if hs300_ew is not None:
@@ -174,11 +174,18 @@ def run_rotation(ind_ret, eval_dates, all_dates, lookback, top_n, hs300_ew):
                     break
             if s and e and s > 0:
                 ew_ret = e / s - 1
-        if np.isfinite(ew_ret):
-            monthly_excess.append(port_ret - ew_ret)
 
+        # Proportional cost: 20bps * turnover_rate (per-trade, not flat)
         if prev is not None:
-            turnovers.append(len(set(sel) - set(prev)) / len(sel))
+            turnover_rate = len(set(sel) - set(prev)) / len(sel)
+        else:
+            turnover_rate = 1.0  # first month: full position build
+        turnovers.append(turnover_rate)
+        cost = COST_BPS * turnover_rate
+
+        if np.isfinite(ew_ret):
+            monthly_excess.append(port_ret - cost - ew_ret)
+
         prev = sel
         n_months += 1
 

@@ -35,8 +35,8 @@ IND_PATH = ROOT / "data/meta/industry_classification.csv"
 
 warnings.filterwarnings("ignore")
 
-COST_BPS_MONTHLY = 0.0020  # monthly rotation cost
-COST_BPS_ANNUAL = 0.0020   # single rebalance cost for static hold
+COST_BPS_MONTHLY = 0.0020  # 20 bps per traded side; applied proportionally to monthly turnover (rotation)
+COST_BPS_ANNUAL = 0.0020   # single full-rebalance cost for static hold (correct: 100% turnover per rebalance)
 MIN_STOCKS = 3
 ROTATION_VARIANTS = [
     ("LB60_Top3_aw", 60, 3, "aw"),
@@ -264,7 +264,7 @@ def compute_rotation_metrics(
                 ind_rets.append(r)
         if len(ind_rets) == 0:
             continue
-        portfolio_ret = np.mean(ind_rets) - cost_bps
+        portfolio_ret = np.mean(ind_rets)  # raw return, cost applied below
 
         # Benchmark
         ew_ret = np.nan
@@ -278,13 +278,18 @@ def compute_rotation_metrics(
             if ew_entry and ew_exit and ew_entry > 0:
                 ew_ret = ew_exit / ew_entry - 1
 
-        if np.isfinite(ew_ret):
-            monthly_excess.append(portfolio_ret - ew_ret)
-
-        # Turnover
+        # Turnover (compute before cost for proportional application)
         if prev_selected is not None:
             n_changed = len(set(selected) - set(prev_selected))
-            turnovers.append(n_changed / len(selected))
+            turnover_rate = n_changed / len(selected)
+        else:
+            turnover_rate = 1.0  # first month: full build
+        turnovers.append(turnover_rate)
+        monthly_cost = cost_bps * turnover_rate
+
+        if np.isfinite(ew_ret):
+            monthly_excess.append(portfolio_ret - monthly_cost - ew_ret)
+
         prev_selected = selected
         n_months += 1
 

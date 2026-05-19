@@ -193,3 +193,105 @@ C1 — FAIL（closeout complete，C1-B/C1-C blocked）
 - 报告：`reports/c1_industry_inside_stock_selection_20260519.md`
 - 研究计划：`reports/c1_research_plan_20260519.md`
 
+---
+
+## 2026-05-19：Turnover Diagnostic
+
+### Cost Model Audit
+
+- **发现 cost model bug**：B1/B2/decomposition 全部脚本将 20bps 按 flat monthly cost 扣减，但 20bps 是 per-trade 成本（印花税+佣金+滑点），应对 turnover portion 按比例扣减。
+- C1 正确使用了 `COST_BPS * turnover_rate`。
+
+受影响脚本：
+
+```text
+evaluate_industry_rotation.py          — flat -COST_BPS_PER_TRADE 每月
+diagnose_b1_aw_ew_decomposition.py     — flat -COST_BPS_MONTHLY 每月
+diagnose_b1_concentration_cap.py       — flat -COST_BPS 每月
+diagnose_b1_cap_time_variation.py      — flat -COST_BPS 每月
+evaluate_b2_multifactor.py             — flat -COST_BPS 每月
+```
+
+### Turnover Decomposition Results
+
+| Variant | Mean TO | Median TO | Key Driver |
+|---|---|---|---|
+| B1 LB20 Top3 | 80.4% | 100.0% | Signal noise (LB20 ranks unstable) |
+| B1 LB20 Top5 | 74.9% | 80.0% | Signal noise |
+| B1 LB60 Top3 | 49.0% | 33.3% | Boundary crossing dominates |
+| B1 LB60 Top5 | 45.7% | 40.0% | Boundary crossing dominates |
+| C1 Top20 | 52.9% | 50.0% | Within-industry rank churn (77%) |
+
+### Cost Overcharge Impact (LB60 Top3)
+
+- Mean overcharge: 10.2 bps/month
+- Annualized: 122.4 bps/year
+- Flat cost = 204% of correct proportional cost
+
+### Signal Stability
+
+- Mean Spearman r = 0.591 (LB60) — moderate, explains ~50% boundary churn
+- LB20 rank stability very low (r ~ 0.06) — explains LB20's 80%+ turnover
+- Mean abs rank shift = 6.2 positions/month
+
+### Key Findings
+
+1. **Cost model bug confirmed**: B1/B2 overcharge ~10 bps/month. Does NOT change overall FAIL/OBSERVE conclusions.
+2. **Turnover is structural, not implementation**: Primary source is signal ranking noise + boundary proximity, not calculation error.
+3. **C1 turnover is ~53% stock-level** (better than B1 estimates suggested), but still above 50% gate.
+4. **LB60 is the minimum viable lookback** — shorter lookbacks produce extreme turnover.
+5. **77% of C1 turnover is within-industry rank churn**, 23% is cross-industry.
+
+### Recommendations
+
+1. Fix cost model in all B1/B2 scripts (before any future formal backtest)
+2. Consider hysteresis buffer or signal smoothing to reduce boundary-driven turnover
+3. For new signal directions: measure rank stability at design time
+
+脚本：`scripts/diagnose_turnover.py`
+报告：`reports/turnover_diagnostic_20260519.md`
+
+---
+
+## 2026-05-19：Cost Model Fix — Flat → Turnover-Proportional
+
+### 修正内容
+
+将 7 个脚本的 cost model 从 flat monthly 改为 turnover-proportional：
+
+```text
+cost = COST_BPS * turnover_rate  (per-trade, not flat per month)
+```
+
+第一月 turnover_rate = 1.0（建仓），之后按 `len(set(curr) - set(prev)) / len(curr)` 计算。
+
+### 修改文件
+
+| 脚本 | 修改行 | 改动 |
+|---|---|---|
+| `evaluate_industry_rotation.py` | L55, L375-393, L434-435, L622 | 重排 turnover 计算到 cost 之前，df["turnover_rate"] 列，proportional cost |
+| `diagnose_b1_aw_ew_decomposition.py` | L43, L247, L260-268 | turnover 前置计算，cost 按比例 |
+| `diagnose_b1_concentration_cap.py` | L32, L264, L276-285 | 同上 |
+| `diagnose_b1_cap_time_variation.py` | L30, L223, L234-243 | 同上 |
+| `diagnose_b1_ew_only.py` | L31, L165, L177-186 | 同上 |
+| `evaluate_b2_multifactor.py` | L36, L231, L243-254 | 同上 |
+| `diagnose_b1_static_hold.py` | L38-39, L267, L285-296 | 同上（rotation 路径；static/annual 路径不变） |
+
+### 不修改
+
+- `evaluate_c1_industry_inside_stock_selection.py`（已正确使用 proportional cost）
+- 历史 closeout 报告
+- `data/raw/`
+- 策略/回测/风控/执行代码
+
+### 验证
+
+```bash
+python -m py_compile (all 7 scripts)  → ALL PASS
+python scripts/evaluate_industry_rotation.py --smoke → PASS (11 months, proportional cost)
+```
+
+### Disclaimer
+
+旧 B1/B2 报告使用 flat monthly cost。后续评估统一使用 turnover-proportional cost。历史结论不变。
+

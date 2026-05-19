@@ -30,6 +30,18 @@ handoff/ 是本地备份目录，不提交
 .env gitignored，不提交
 ```
 
+**Cost Model 修正 (2026-05-19)**:
+
+```text
+旧 B1/B2 报告使用 flat monthly cost（每月固定扣 20bps），
+已在 2026-05-19 修正为 turnover-proportional cost = 20bps * turnover_rate。
+受影响报告: b1_ew_only, b1_concentration_cap, b1_cap_time_variation, 
+  b1_static_hold, b1_aw_ew_decomposition, b2_multifactor_eval.
+C1 报告已正确（始终使用 proportional cost），不受影响。
+历史 closeout 结论不变 (OBSERVE/FRAGILE, PAUSE/MARGINAL-FAIL, FAIL)。
+后续评估统一使用 proportional cost。
+```
+
 ---
 
 ## 2. 已完成研究周期结论
@@ -75,6 +87,7 @@ source：Tushare / jiaoch.site stock_basic
 | `scripts/diagnose_b1_static_hold.py` | Static hold 事前对比诊断 |
 | `scripts/diagnose_b1_aw_ew_decomposition.py` | AW/EW 2×2 分解（signal × holding） |
 | `scripts/diagnose_b1_ew_only.py` | EW-only 24-variant 稳定性网格扫描 |
+| `scripts/diagnose_turnover.py` | Turnover 分解 + cost model audit |
 
 ---
 
@@ -94,6 +107,7 @@ source：Tushare / jiaoch.site stock_basic
 | `reports/b1_static_hold_diagnostic_20260518.md` | Static hold ex-ante 诊断 |
 | `reports/b1_aw_ew_decomposition_20260518.md` | AW/EW 2×2 decomposition |
 | `reports/b1_ew_only_diagnostic_20260518.md` | EW-only 24-variant stability |
+| `reports/turnover_diagnostic_20260519.md` | Turnover 分解诊断 + cost model audit |
 
 ---
 
@@ -108,12 +122,33 @@ source：Tushare / jiaoch.site stock_basic
 
 ---
 
-## 7. 下一步建议
+## 7. Turnover 诊断结果（2026-05-19）
 
-1. B1 baseline 稳健性再审查
-2. Turnover 诊断 — B1/C1 换手率均 >50%，成本拖累是否可降低
-3. 入场信号质量 — 月末 snapshot 信号是否过于粗糙
-4. 转向非行业内相对动量方向（不以行业 membership 做 de-meaning）
+### 已完成
+
+- **Cost model bug 发现**：B1/B2/decomposition 五脚本将 20bps 按 flat monthly 扣减，应改为 `20bps * turnover_rate`。C1 正确。
+- **B1 LB60 Top3 turnover = 49.0%**（median 33.3%），主要来源：信号排名边界噪声 + Top-N boundary crossing。
+- **B1 LB20 全部 > 74%**，LB20 排名极不稳定（Spearman r ~ 0.06），不建议使用。
+- **C1 Top20 turnover = 52.9%**，77% 为行业内 rank churn，23% 为跨行业。
+- **过收费影响**：LB60 Top3 年均多扣 122 bps，不改变 FAIL/OBSERVE 结论但需修正。
+- 脚本：`scripts/diagnose_turnover.py`，报告：`reports/turnover_diagnostic_20260519.md`。
+
+### Turnover 来源归因
+
+| 来源 | B1 | C1 |
+|---|---|---|
+| 信号排名噪声 | 主因 | 主因 |
+| Top-N 边界穿透 | 主因 | — |
+| Lookback 窗口 | LB20 >> LB60 | — |
+| 行业内 rank churn | — | 77% |
+| 行业集合变化 | 可忽略 | 可忽略 |
+
+## 8. 下一步建议
+
+1. ~~Turnover 诊断~~ → **已完成**。Turnover 是结构性问题（信号噪声），非实现 bug。
+2. 入场信号质量 — 月末 snapshot 信号是否过于粗糙；周频/双周频是否能改善
+3. 转向非行业内相对动量方向（不以行业 membership 做 de-meaning）
+4. B1 baseline 稳健性再审查（可选，已被 turnover 诊断部分覆盖）
 
 原则：
 

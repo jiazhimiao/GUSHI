@@ -52,7 +52,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # ── Config ──
 SIGNAL_LOOKBACKS = [5, 20, 60]  # trading days for industry momentum
 TOP_N_LIST = [3, 5]
-COST_BPS_PER_TRADE = 0.0020  # 20 bps/month (印花税0.05%卖方 + 佣金0.025%双边 + 滑点0.1%)
+COST_BPS_PER_TRADE = 0.0020  # 20 bps per traded side (印花税0.05%卖方 + 佣金0.025%双边 + 滑点0.1%); applied proportionally to turnover
 MIN_STOCKS_PER_INDUSTRY = 3
 
 
@@ -372,9 +372,24 @@ def evaluate_results(
 
     n_months = len(df)
 
-    # Monthly excess after cost
-    cost_per_month = COST_BPS_PER_TRADE  # single trade cost
-    df["excess_after_cost"] = df["excess_vs_hs300ew"] - cost_per_month
+    # Turnover (compute before cost so cost is proportional)
+    if len(df) >= 2:
+        prev_selected = df["selected"].shift(1).str.split(",")
+        curr_selected = df["selected"].str.split(",")
+        turnover_list = []
+        for prev_s, curr_s in zip(prev_selected, curr_selected):
+            if isinstance(prev_s, list) and isinstance(curr_s, list):
+                n_changed = len(set(curr_s) - set(prev_s))
+                turnover_list.append(n_changed / len(curr_s))
+            else:
+                turnover_list.append(1.0)  # first month: full build
+        df["turnover_rate"] = turnover_list
+    else:
+        df["turnover_rate"] = 1.0
+
+    # Monthly excess after proportional cost
+    # cost = 20bps * turnover_rate (per-trade, not flat monthly)
+    df["excess_after_cost"] = df["excess_vs_hs300ew"] - COST_BPS_PER_TRADE * df["turnover_rate"]
 
     monthly_excess = df["excess_after_cost"].dropna()
 
@@ -416,18 +431,8 @@ def evaluate_results(
             "win_rate": float(yr_win),
         }
 
-    # Turnover
-    if len(df) >= 2:
-        prev_selected = df["selected"].shift(1).str.split(",")
-        curr_selected = df["selected"].str.split(",")
-        turnovers = []
-        for prev_s, curr_s in zip(prev_selected, curr_selected):
-            if isinstance(prev_s, list) and isinstance(curr_s, list):
-                n_changed = len(set(curr_s) - set(prev_s))
-                turnovers.append(n_changed / len(curr_s))
-        avg_turnover = np.mean(turnovers) if turnovers else np.nan
-    else:
-        avg_turnover = np.nan
+    # Turnover (already computed above for cost; reuse)
+    avg_turnover = df["turnover_rate"].mean() if "turnover_rate" in df.columns else np.nan
 
     # Industry concentration
     all_selected = df["selected"].str.split(",").explode()
@@ -619,7 +624,7 @@ def build_diagnostic_report(
     w("# B1 — Industry Rotation Diagnostic Report")
     w(f"\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     w(f"Period: {start} ~ {end}")
-    w(f"Cost assumption: {COST_BPS_PER_TRADE:.2%} per monthly trade")
+    w(f"Cost assumption: {COST_BPS_PER_TRADE:.2%} per traded side, applied proportionally to monthly turnover")
     w(f"\n> **Rule update 2026-05-18**: 最大相对回撤从 <10% 一票否决改为风险分层 + Relative Calmar >= 0.5。")
 
     # ── 1. Rule Change Summary ──
@@ -1097,7 +1102,9 @@ def main():
     report = build_diagnostic_report(all_metrics, ind_n_stocks, start, end,
                                      ind_ret_ew, eval_dates, idx_close)
 
-    report_path = ROOT / "reports" / "industry_rotation_diagnostic_20260518.md"
+    report_path = ROOT / "reports" / "smoke" / f"industry_rotation_smoke_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md" if smoke else \
+                 ROOT / "reports" / f"industry_rotation_diagnostic_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(report)
 

@@ -27,7 +27,7 @@ IND_PATH = ROOT / "data/meta/industry_classification.csv"
 
 warnings.filterwarnings("ignore")
 
-COST_BPS = 0.0020
+COST_BPS = 0.0020  # 20 bps per traded side; applied proportionally to monthly turnover
 LOOKBACK = 60
 TOP_N = 3
 CAPPED = 0.20
@@ -220,7 +220,7 @@ def run_one(ind_ret_ew, stock_detail, eval_dates, all_dates, cap_val, hs300_ew, 
                 cum *= (1 + day_ret / nv)
                 n_days += 1
 
-        port_ret = cum - 1 - COST_BPS
+        port_ret = cum - 1  # raw return, cost applied below
         ew_ret = np.nan
         if hs300_ew is not None:
             s = hs300_ew.get(entry)
@@ -231,11 +231,18 @@ def run_one(ind_ret_ew, stock_detail, eval_dates, all_dates, cap_val, hs300_ew, 
                     break
             if s and e and s > 0:
                 ew_ret = e / s - 1
-        if np.isfinite(ew_ret):
-            monthly_excess.append(port_ret - ew_ret)
 
+        # Proportional cost: 20bps * turnover_rate (per-trade, not flat)
         if prev:
-            turnovers.append(len(set(sel) - set(prev)) / len(sel))
+            turnover_rate = len(set(sel) - set(prev)) / len(sel)
+        else:
+            turnover_rate = 1.0  # first month: full position build
+        turnovers.append(turnover_rate)
+        cost = COST_BPS * turnover_rate
+
+        if np.isfinite(ew_ret):
+            monthly_excess.append(port_ret - cost - ew_ret)
+
         prev = sel
         nm += 1
 
